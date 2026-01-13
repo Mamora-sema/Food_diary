@@ -1,12 +1,287 @@
 // static/js/main.js
 
+// =====================================================
+// ЛОКАЛЬНОЕ КЭШИРОВАНИЕ ДАННЫХ
+// =====================================================
+
+const AppCache = {
+    CACHE_KEY: 'food_diary_cache',
+    CACHE_VERSION: '1.0',
+
+    // Получить данные из кэша
+    get() {
+        try {
+            const cached = localStorage.getItem(this.CACHE_KEY);
+            if (cached) {
+                const data = JSON.parse(cached);
+                if (data.version === this.CACHE_VERSION) {
+                    return data;
+                }
+            }
+        } catch (e) {
+            console.error('Cache read error:', e);
+        }
+        return null;
+    },
+
+    // Сохранить данные в кэш
+    set(data) {
+        try {
+            data.version = this.CACHE_VERSION;
+            data.cachedAt = new Date().toISOString();
+            localStorage.setItem(this.CACHE_KEY, JSON.stringify(data));
+        } catch (e) {
+            console.error('Cache write error:', e);
+        }
+    },
+
+    // Очистить кэш
+    clear() {
+        localStorage.removeItem(this.CACHE_KEY);
+    },
+
+    // Проверить, актуален ли кэш (менее 5 минут)
+    isValid() {
+        const cached = this.get();
+        if (!cached || !cached.cachedAt) return false;
+
+        const cachedTime = new Date(cached.cachedAt).getTime();
+        const now = new Date().getTime();
+        const fiveMinutes = 5 * 60 * 1000;
+
+        return (now - cachedTime) < fiveMinutes;
+    }
+};
+
+// =====================================================
+// ОЧЕРЕДЬ ИЗМЕНЕНИЙ ДЛЯ ОФФЛАЙН РЕЖИМА
+// =====================================================
+
+const OfflineQueue = {
+    QUEUE_KEY: 'food_diary_queue',
+
+    get() {
+        try {
+            const queue = localStorage.getItem(this.QUEUE_KEY);
+            return queue ? JSON.parse(queue) : { new_entries: [], deleted_entries: [], new_products: [], deleted_products: [] };
+        } catch (e) {
+            return { new_entries: [], deleted_entries: [], new_products: [], deleted_products: [] };
+        }
+    },
+
+    set(queue) {
+        localStorage.setItem(this.QUEUE_KEY, JSON.stringify(queue));
+    },
+
+    addEntry(entry) {
+        const queue = this.get();
+        entry._tempId = 'temp_' + Date.now();
+        queue.new_entries.push(entry);
+        this.set(queue);
+        return entry._tempId;
+    },
+
+    deleteEntry(entryId) {
+        const queue = this.get();
+        // Если это временная запись - просто удаляем из очереди
+        if (String(entryId).startsWith('temp_')) {
+            queue.new_entries = queue.new_entries.filter(e => e._tempId !== entryId);
+        } else {
+            queue.deleted_entries.push(entryId);
+        }
+        this.set(queue);
+    },
+
+    addProduct(product) {
+        const queue = this.get();
+        product._tempId = 'temp_' + Date.now();
+        queue.new_products.push(product);
+        this.set(queue);
+        return product._tempId;
+    },
+
+    clear() {
+        localStorage.removeItem(this.QUEUE_KEY);
+    },
+
+    hasChanges() {
+        const queue = this.get();
+        return queue.new_entries.length > 0 ||
+               queue.deleted_entries.length > 0 ||
+               queue.new_products.length > 0 ||
+               queue.deleted_products.length > 0;
+    }
+};
+
+// =====================================================
+// API ФУНКЦИИ
+// =====================================================
+
+const API = {
+    // Синхронизация всех данных
+    async syncAll() {
+        try {
+            const response = await fetch('/api/sync');
+            if (!response.ok) throw new Error('Sync failed');
+
+            const result = await response.json();
+            if (result.success) {
+                AppCache.set(result);
+                return result.data;
+            }
+            throw new Error(result.error || 'Sync failed');
+        } catch (e) {
+            console.error('Sync error:', e);
+            // Возвращаем кэшированные данные при ошибке
+            const cached = AppCache.get();
+            return cached ? cached.data : null;
+        }
+    },
+
+    // Отправка изменений
+    async pushChanges() {
+        if (!OfflineQueue.hasChanges()) return true;
+
+        try {
+            const queue = OfflineQueue.get();
+            const response = await fetch('/api/sync', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(queue)
+            });
+
+            if (response.ok) {
+                OfflineQueue.clear();
+                return true;
+            }
+            return false;
+        } catch (e) {
+            console.error('Push error:', e);
+            return false;
+        }
+    },
+
+    // Добавить запись приёма пищи
+    async addEntry(entry) {
+        try {
+            const response = await fetch('/api/add_entry', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(entry)
+            });
+
+            if (response.ok) {
+                const result = await response.json();
+                return result.entry;
+            }
+            throw new Error('Add entry failed');
+        } catch (e) {
+            // Добавляем в оффлайн очередь
+            console.warn('Adding to offline queue:', e);
+            const tempId = OfflineQueue.addEntry(entry);
+            return { ...entry, id: tempId, _offline: true };
+        }
+    },
+
+    // Удалить запись
+    async deleteEntry(entryId) {
+        try {
+            const response = await fetch(`/api/delete_entry/${entryId}`, {
+                method: 'DELETE'
+            });
+            return response.ok;
+        } catch (e) {
+            OfflineQueue.deleteEntry(entryId);
+            return true;
+        }
+    },
+
+    // Добавить продукт
+    async addProduct(product) {
+        try {
+            const response = await fetch('/api/add_product', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(product)
+            });
+
+            if (response.ok) {
+                const result = await response.json();
+                return result.product;
+            }
+            throw new Error('Add product failed');
+        } catch (e) {
+            const tempId = OfflineQueue.addProduct(product);
+            return { ...product, id: tempId, _offline: true };
+        }
+    }
+};
+
+// =====================================================
+// КАЛЬКУЛЯТОР КБЖУ
+// =====================================================
+
+const NutritionCalc = {
+    // Расчёт калорий из БЖУ
+    calculateCalories(protein, fat, carbs) {
+        return Math.round((protein * 4) + (fat * 9) + (carbs * 4));
+    },
+
+    // Расчёт питательности для веса
+    forWeight(product, weight) {
+        const multiplier = weight / 100;
+        return {
+            calories: Math.round(product.calories * multiplier * 10) / 10,
+            protein: Math.round(product.protein * multiplier * 10) / 10,
+            fat: Math.round(product.fat * multiplier * 10) / 10,
+            carbs: Math.round(product.carbs * multiplier * 10) / 10
+        };
+    },
+
+    // Суммирование записей
+    sumEntries(entries) {
+        return entries.reduce((sum, entry) => {
+            const nutrition = entry.nutrition || this.forWeight(entry.product || entry, entry.weight);
+            return {
+                calories: sum.calories + nutrition.calories,
+                protein: sum.protein + nutrition.protein,
+                fat: sum.fat + nutrition.fat,
+                carbs: sum.carbs + nutrition.carbs
+            };
+        }, { calories: 0, protein: 0, fat: 0, carbs: 0 });
+    }
+};
+
+// =====================================================
+// ИНИЦИАЛИЗАЦИЯ СТРАНИЦЫ
+// =====================================================
+
 document.addEventListener('DOMContentLoaded', function() {
+
+    // Синхронизация при загрузке страницы
+    if (!AppCache.isValid()) {
+        API.syncAll().then(data => {
+            if (data) {
+                console.log('Data synced:', data);
+                // Здесь можно обновить UI если нужно
+            }
+        });
+    }
+
+    // Попытка отправить оффлайн изменения
+    if (OfflineQueue.hasChanges() && navigator.onLine) {
+        API.pushChanges().then(success => {
+            if (success) {
+                console.log('Offline changes pushed');
+                showToast('Данные синхронизированы', 'success');
+            }
+        });
+    }
 
     // =====================================================
     // СВОРАЧИВАНИЕ ПРИЁМОВ ПИЩИ
     // =====================================================
 
-    // Обработка сворачивания - переключение иконки стрелки
     document.querySelectorAll('[data-bs-toggle="collapse"]').forEach(function(header) {
         const targetId = header.getAttribute('data-bs-target');
         if (!targetId) return;
@@ -30,15 +305,8 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     });
 
-    // Предотвращаем сворачивание при клике на кнопки внутри заголовка
-    document.querySelectorAll('.meal-card .card-header .btn').forEach(function(btn) {
-        btn.addEventListener('click', function(e) {
-            e.stopPropagation();
-        });
-    });
-
     // =====================================================
-    // ПОИСК ПРОДУКТОВ В МОДАЛЬНОМ ОКНЕ
+    // ПОИСК ПРОДУКТОВ
     // =====================================================
 
     const productSearch = document.getElementById('productSearch');
@@ -54,22 +322,10 @@ document.addEventListener('DOMContentLoaded', function() {
                 option.style.display = text.includes(filter) ? '' : 'none';
             });
         });
-
-        // Очистка поиска при открытии модального окна
-        const addMealModal = document.getElementById('addMealModal');
-        if (addMealModal) {
-            addMealModal.addEventListener('show.bs.modal', function() {
-                productSearch.value = '';
-                const options = productSelect.querySelectorAll('option');
-                options.forEach(option => {
-                    option.style.display = '';
-                });
-            });
-        }
     }
 
     // =====================================================
-    // БЫСТРЫЕ КНОПКИ ВЕСА (50г, 100г, 150г, 200г)
+    // КНОПКИ ВЕСА
     // =====================================================
 
     const weightBtns = document.querySelectorAll('.weight-btn');
@@ -83,33 +339,14 @@ document.addEventListener('DOMContentLoaded', function() {
                 weightInput.value = weight;
                 weightInput.dispatchEvent(new Event('input'));
 
-                // Подсветка активной кнопки
-                weightBtns.forEach(b => b.classList.remove('active', 'btn-secondary'));
-                weightBtns.forEach(b => b.classList.add('btn-outline-secondary'));
-                this.classList.remove('btn-outline-secondary');
-                this.classList.add('active', 'btn-secondary');
+                weightBtns.forEach(b => b.classList.remove('active', 'btn-success'));
+                this.classList.add('active', 'btn-success');
             }
         });
     });
 
-    // Сброс подсветки при ручном вводе веса
-    if (weightInput) {
-        weightInput.addEventListener('input', function() {
-            const value = this.value;
-            weightBtns.forEach(btn => {
-                if (btn.dataset.weight === value) {
-                    btn.classList.remove('btn-outline-secondary');
-                    btn.classList.add('active', 'btn-secondary');
-                } else {
-                    btn.classList.remove('active', 'btn-secondary');
-                    btn.classList.add('btn-outline-secondary');
-                }
-            });
-        });
-    }
-
     // =====================================================
-    // ПРЕДПРОСМОТР ПИЩЕВОЙ ЦЕННОСТИ
+    // ПРЕДПРОСМОТР ПИТАТЕЛЬНОСТИ
     // =====================================================
 
     function updateNutritionPreview() {
@@ -120,40 +357,41 @@ document.addEventListener('DOMContentLoaded', function() {
 
         const selectedOption = productSelect.options[productSelect.selectedIndex];
         if (!selectedOption || !selectedOption.value) {
-            // Сброс значений если продукт не выбран
             setPreviewValues(0, 0, 0, 0);
             return;
         }
 
         const weight = parseFloat(weightInput.value) || 0;
-        const multiplier = weight / 100;
+        const product = {
+            calories: parseFloat(selectedOption.dataset.calories) || 0,
+            protein: parseFloat(selectedOption.dataset.protein) || 0,
+            fat: parseFloat(selectedOption.dataset.fat) || 0,
+            carbs: parseFloat(selectedOption.dataset.carbs) || 0
+        };
 
-        const calories = parseFloat(selectedOption.dataset.calories) || 0;
-        const protein = parseFloat(selectedOption.dataset.protein) || 0;
-        const fat = parseFloat(selectedOption.dataset.fat) || 0;
-        const carbs = parseFloat(selectedOption.dataset.carbs) || 0;
-
+        const nutrition = NutritionCalc.forWeight(product, weight);
         setPreviewValues(
-            Math.round(calories * multiplier),
-            (protein * multiplier).toFixed(1),
-            (fat * multiplier).toFixed(1),
-            (carbs * multiplier).toFixed(1)
+            Math.round(nutrition.calories),
+            nutrition.protein.toFixed(1),
+            nutrition.fat.toFixed(1),
+            nutrition.carbs.toFixed(1)
         );
     }
 
     function setPreviewValues(calories, protein, fat, carbs) {
-        const previewCalories = document.getElementById('previewCalories');
-        const previewProtein = document.getElementById('previewProtein');
-        const previewFat = document.getElementById('previewFat');
-        const previewCarbs = document.getElementById('previewCarbs');
+        const els = {
+            calories: document.getElementById('previewCalories'),
+            protein: document.getElementById('previewProtein'),
+            fat: document.getElementById('previewFat'),
+            carbs: document.getElementById('previewCarbs')
+        };
 
-        if (previewCalories) previewCalories.textContent = calories;
-        if (previewProtein) previewProtein.textContent = protein;
-        if (previewFat) previewFat.textContent = fat;
-        if (previewCarbs) previewCarbs.textContent = carbs;
+        if (els.calories) els.calories.textContent = calories;
+        if (els.protein) els.protein.textContent = protein;
+        if (els.fat) els.fat.textContent = fat;
+        if (els.carbs) els.carbs.textContent = carbs;
     }
 
-    // Привязка событий для обновления предпросмотра
     if (productSelect) {
         productSelect.addEventListener('change', updateNutritionPreview);
     }
@@ -163,7 +401,7 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 
     // =====================================================
-    // МОДАЛЬНОЕ ОКНО ДОБАВЛЕНИЯ ПРИЁМА ПИЩИ
+    // МОДАЛЬНОЕ ОКНО
     // =====================================================
 
     const addMealModal = document.getElementById('addMealModal');
@@ -171,7 +409,6 @@ document.addEventListener('DOMContentLoaded', function() {
         addMealModal.addEventListener('show.bs.modal', function(event) {
             const button = event.relatedTarget;
 
-            // Установка типа приёма пищи из кнопки
             if (button) {
                 const mealType = button.dataset.mealType;
                 const modalMealType = document.getElementById('modalMealType');
@@ -180,257 +417,16 @@ document.addEventListener('DOMContentLoaded', function() {
                 }
             }
 
-            // Сброс формы
-            const weightInput = document.getElementById('weightInput');
-            if (weightInput) {
-                weightInput.value = 100;
-            }
+            // Reset
+            if (weightInput) weightInput.value = 100;
+            if (productSearch) productSearch.value = '';
 
-            // Сброс кнопок веса
-            document.querySelectorAll('.weight-btn').forEach(btn => {
-                btn.classList.remove('active', 'btn-secondary');
-                btn.classList.add('btn-outline-secondary');
+            weightBtns.forEach(btn => {
+                btn.classList.remove('active', 'btn-success');
                 if (btn.dataset.weight === '100') {
-                    btn.classList.remove('btn-outline-secondary');
-                    btn.classList.add('active', 'btn-secondary');
+                    btn.classList.add('active', 'btn-success');
                 }
             });
 
-            // Обновление предпросмотра
             setTimeout(updateNutritionPreview, 100);
         });
-
-        // Сброс при закрытии модального окна
-        addMealModal.addEventListener('hidden.bs.modal', function() {
-            const productSearch = document.getElementById('productSearch');
-            if (productSearch) {
-                productSearch.value = '';
-            }
-
-            const productSelect = document.getElementById('productSelect');
-            if (productSelect) {
-                productSelect.selectedIndex = 0;
-                const options = productSelect.querySelectorAll('option');
-                options.forEach(option => {
-                    option.style.display = '';
-                });
-            }
-
-            setPreviewValues(0, 0, 0, 0);
-        });
-    }
-
-    // Первоначальное обновление предпросмотра
-    updateNutritionPreview();
-
-    // =====================================================
-    // ПОИСК НА СТРАНИЦЕ ПРОДУКТОВ
-    // =====================================================
-
-    const searchProductsInput = document.getElementById('searchProducts');
-    const productsTable = document.getElementById('productsTable');
-
-    if (searchProductsInput && productsTable) {
-        searchProductsInput.addEventListener('input', function() {
-            const filter = this.value.toLowerCase();
-            const rows = productsTable.querySelectorAll('tbody tr');
-
-            rows.forEach(row => {
-                const name = row.cells[0].textContent.toLowerCase();
-                row.style.display = name.includes(filter) ? '' : 'none';
-            });
-        });
-    }
-
-    // =====================================================
-    // АВТОМАТИЧЕСКОЕ СКРЫТИЕ УВЕДОМЛЕНИЙ
-    // =====================================================
-
-    const alerts = document.querySelectorAll('.alert:not(.alert-permanent)');
-    alerts.forEach(alert => {
-        setTimeout(() => {
-            try {
-                const bsAlert = bootstrap.Alert.getOrCreateInstance(alert);
-                if (bsAlert) {
-                    bsAlert.close();
-                }
-            } catch (e) {
-                // Если Bootstrap Alert не доступен, скрываем вручную
-                alert.style.transition = 'opacity 0.3s';
-                alert.style.opacity = '0';
-                setTimeout(() => {
-                    alert.remove();
-                }, 300);
-            }
-        }, 5000);
-    });
-
-    // =====================================================
-    // ПОДТВЕРЖДЕНИЕ УДАЛЕНИЯ
-    // =====================================================
-
-    document.querySelectorAll('[data-confirm]').forEach(element => {
-        element.addEventListener('click', function(e) {
-            const message = this.dataset.confirm || 'Вы уверены?';
-            if (!confirm(message)) {
-                e.preventDefault();
-                return false;
-            }
-        });
-    });
-
-    // =====================================================
-    // УТИЛИТЫ
-    // =====================================================
-
-    // Форматирование чисел
-    window.formatNumber = function(num, decimals = 1) {
-        return parseFloat(num).toFixed(decimals);
-    };
-
-    // API для поиска продуктов (асинхронный)
-    window.searchProducts = async function(query) {
-        try {
-            const response = await fetch(`/api/search_products?q=${encodeURIComponent(query)}`);
-            return await response.json();
-        } catch (error) {
-            console.error('Error searching products:', error);
-            return [];
-        }
-    };
-
-    // API для получения информации о продукте
-    window.getProductNutrition = async function(productId, weight = 100) {
-        try {
-            const response = await fetch(`/api/product/${productId}?weight=${weight}`);
-            return await response.json();
-        } catch (error) {
-            console.error('Error fetching product:', error);
-            return null;
-        }
-    };
-
-    // =====================================================
-    // ДОБАВЛЕНИЕ ПРОДУКТА - ПЕРЕСЧЁТ НА 100Г
-    // =====================================================
-
-    const per100g = document.getElementById('per100g');
-    const perCustom = document.getElementById('perCustom');
-    const customServing = document.getElementById('customServing');
-    const previewCard = document.getElementById('previewCard');
-
-    const inputCalories = document.getElementById('inputCalories');
-    const inputProtein = document.getElementById('inputProtein');
-    const inputFat = document.getElementById('inputFat');
-    const inputCarbs = document.getElementById('inputCarbs');
-
-    const preview100Calories = document.getElementById('preview100Calories');
-    const preview100Protein = document.getElementById('preview100Protein');
-    const preview100Fat = document.getElementById('preview100Fat');
-    const preview100Carbs = document.getElementById('preview100Carbs');
-
-    function updateServingType() {
-        if (!perCustom || !customServing || !previewCard) return;
-
-        if (perCustom.checked) {
-            customServing.disabled = false;
-            customServing.focus();
-            previewCard.style.display = 'block';
-            updateProductPreview();
-        } else {
-            customServing.disabled = true;
-            previewCard.style.display = 'none';
-        }
-    }
-
-    function updateProductPreview() {
-        if (!perCustom || !perCustom.checked) return;
-        if (!customServing || !inputCalories) return;
-
-        const serving = parseFloat(customServing.value) || 100;
-        const multiplier = 100 / serving;
-
-        const calories = parseFloat(inputCalories.value) || 0;
-        const protein = parseFloat(inputProtein.value) || 0;
-        const fat = parseFloat(inputFat.value) || 0;
-        const carbs = parseFloat(inputCarbs.value) || 0;
-
-        if (preview100Calories) preview100Calories.textContent = (calories * multiplier).toFixed(1);
-        if (preview100Protein) preview100Protein.textContent = (protein * multiplier).toFixed(1);
-        if (preview100Fat) preview100Fat.textContent = (fat * multiplier).toFixed(1);
-        if (preview100Carbs) preview100Carbs.textContent = (carbs * multiplier).toFixed(1);
-    }
-
-    if (per100g) {
-        per100g.addEventListener('change', updateServingType);
-    }
-
-    if (perCustom) {
-        perCustom.addEventListener('change', updateServingType);
-    }
-
-    if (customServing) {
-        customServing.addEventListener('input', updateProductPreview);
-    }
-
-    if (inputCalories) {
-        inputCalories.addEventListener('input', updateProductPreview);
-    }
-
-    if (inputProtein) {
-        inputProtein.addEventListener('input', updateProductPreview);
-    }
-
-    if (inputFat) {
-        inputFat.addEventListener('input', updateProductPreview);
-    }
-
-    if (inputCarbs) {
-        inputCarbs.addEventListener('input', updateProductPreview);
-    }
-
-    // =====================================================
-    // КЛАВИАТУРНЫЕ СОКРАЩЕНИЯ
-    // =====================================================
-
-    document.addEventListener('keydown', function(e) {
-        // Ctrl/Cmd + K - фокус на поиске
-        if ((e.ctrlKey || e.metaKey) && e.key === 'k') {
-            e.preventDefault();
-            const searchInput = document.getElementById('productSearch') ||
-                               document.getElementById('searchProducts');
-            if (searchInput) {
-                searchInput.focus();
-                searchInput.select();
-            }
-        }
-
-        // Escape - закрытие модальных окон
-        if (e.key === 'Escape') {
-            const openModals = document.querySelectorAll('.modal.show');
-            openModals.forEach(modal => {
-                const bsModal = bootstrap.Modal.getInstance(modal);
-                if (bsModal) {
-                    bsModal.hide();
-                }
-            });
-        }
-    });
-
-    // =====================================================
-    // ИНИЦИАЛИЗАЦИЯ TOOLTIPS (если используются)
-    // =====================================================
-
-    const tooltipTriggerList = document.querySelectorAll('[data-bs-toggle="tooltip"]');
-    if (tooltipTriggerList.length > 0 && typeof bootstrap !== 'undefined') {
-        tooltipTriggerList.forEach(function(tooltipTriggerEl) {
-            new bootstrap.Tooltip(tooltipTriggerEl);
-        });
-    }
-
-    // =====================================================
-    // CONSOLE LOG ДЛЯ ОТЛАДКИ
-    // =====================================================
-
-    console.log('🍎 Дневник питания загружен');
-});

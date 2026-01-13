@@ -1,45 +1,167 @@
-
+<!-- templates/settings.html -->
 {% extends "base.html" %}
 
 {% block title %}Настройки{% endblock %}
 
 {% block content %}
 <div class="row justify-content-center">
-    <div class="col-md-6">
+    <div class="col-md-8 col-lg-6">
         <div class="card">
             <div class="card-header bg-success text-white">
-                <h5 class="mb-0"><i class="bi bi-gear"></i> Настройки РСК</h5>
+                <h5 class="mb-0"><i class="bi bi-gear"></i> Настройки</h5>
             </div>
             <div class="card-body">
-                <p class="text-muted">Установите ваши дневные цели по калориям и макронутриентам</p>
-                
-                <form method="POST">
-                    <div class="mb-3">
-                        <label class="form-label">Калории (ккал/день)</label>
-                        <input type="number" name="calories" class="form-control" value="{{ goals.calories|int }}" min="500" max="10000" required>
+                <form method="POST" id="settingsForm">
+                    <!-- Вес -->
+                    <div class="card bg-light mb-4">
+                        <div class="card-body">
+                            <h6><i class="bi bi-person-standing"></i> Ваш вес</h6>
+                            <div class="row align-items-center">
+                                <div class="col-8">
+                                    <input type="range" class="form-range" id="weightSlider" name="weight"
+                                           min="40" max="200" value="{{ current_user.weight }}" step="0.5">
+                                </div>
+                                <div class="col-4">
+                                    <div class="input-group">
+                                        <input type="number" class="form-control text-center fw-bold"
+                                               id="weightInput" value="{{ current_user.weight }}"
+                                               min="40" max="200" step="0.5">
+                                        <span class="input-group-text">кг</span>
+                                    </div>
+                                </div>
+                            </div>
+                            <small class="text-muted">
+                                Используется для расчёта белков на кг веса
+                            </small>
+                        </div>
                     </div>
-                    
-                    <div class="mb-3">
-                        <label class="form-label">Белки (г/день)</label>
-                        <input type="number" name="protein" class="form-control" value="{{ goals.protein|int }}" min="10" max="500" required>
+
+                    <!-- БЖУ -->
+                    <h6 class="mb-3"><i class="bi bi-sliders"></i> Дневная норма БЖУ</h6>
+
+                    <div class="row g-3 mb-4">
+                        <div class="col-4">
+                            <div class="text-center">
+                                <label class="form-label">
+                                    <span class="text-danger fs-5">●</span><br>
+                                    Белки
+                                </label>
+                                <input type="number" name="protein" id="proteinInput"
+                                       class="form-control form-control-lg text-center fw-bold text-danger"
+                                       value="{{ goals.protein|int }}" min="10" max="500" required>
+                                <small class="text-muted"><span id="proteinPerKg">0</span> г/кг</small>
+                            </div>
+                        </div>
+                        <div class="col-4">
+                            <div class="text-center">
+                                <label class="form-label">
+                                    <span class="text-warning fs-5">●</span><br>
+                                    Жиры
+                                </label>
+                                <input type="number" name="fat" id="fatInput"
+                                       class="form-control form-control-lg text-center fw-bold text-warning"
+                                       value="{{ goals.fat|int }}" min="10" max="300" required>
+                                <small class="text-muted"><span id="fatPerKg">0</span> г/кг</small>
+                            </div>
+                        </div>
+                        <div class="col-4">
+                            <div class="text-center">
+                                <label class="form-label">
+                                    <span class="text-primary fs-5">●</span><br>
+                                    Углеводы
+                                </label>
+                                <input type="number" name="carbs" id="carbsInput"
+                                       class="form-control form-control-lg text-center fw-bold text-primary"
+                                       value="{{ goals.carbs|int }}" min="10" max="800" required>
+                                <small class="text-muted"><span id="carbsPerKg">0</span> г/кг</small>
+                            </div>
+                        </div>
                     </div>
-                    
-                    <div class="mb-3">
-                        <label class="form-label">Жиры (г/день)</label>
-                        <input type="number" name="fat" class="form-control" value="{{ goals.fat|int }}" min="10" max="500" required>
+
+                    <!-- Формула -->
+                    <div class="text-center text-muted small mb-3">
+                        <i class="bi bi-calculator"></i>
+                        Калории = (Б × 4) + (Ж × 9) + (У × 4)
                     </div>
-                    
-                    <div class="mb-3">
-                        <label class="form-label">Углеводы (г/день)</label>
-                        <input type="number" name="carbs" class="form-control" value="{{ goals.carbs|int }}" min="10" max="1000" required>
+
+                    <!-- Калории -->
+                    <div class="card bg-success text-white mb-4">
+                        <div class="card-body text-center py-3">
+                            <div class="small opacity-75">Дневная норма:</div>
+                            <div class="display-5 fw-bold" id="caloriesDisplay">{{ goals.calories|int }}</div>
+                            <div class="small opacity-75">ккал / день</div>
+                        </div>
                     </div>
-                    
-                    <button type="submit" class="btn btn-success w-100">
+
+                    <button type="submit" class="btn btn-success w-100 btn-lg mb-3">
                         <i class="bi bi-check-lg"></i> Сохранить
                     </button>
                 </form>
+
+                <hr>
+
+                <div class="text-center">
+                    <p class="text-muted small mb-2">
+                        Аккаунт: <strong>{{ current_user.username }}</strong><br>
+                        Вес: <strong>{{ current_user.weight }} кг</strong>
+                    </p>
+                    <a href="{{ url_for('logout') }}" class="btn btn-outline-danger btn-sm">
+                        <i class="bi bi-box-arrow-right"></i> Выйти
+                    </a>
+                </div>
             </div>
         </div>
     </div>
 </div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const weightSlider = document.getElementById('weightSlider');
+    const weightInput = document.getElementById('weightInput');
+    const proteinInput = document.getElementById('proteinInput');
+    const fatInput = document.getElementById('fatInput');
+    const carbsInput = document.getElementById('carbsInput');
+    const caloriesDisplay = document.getElementById('caloriesDisplay');
+
+    function updateWeight(value) {
+        weightSlider.value = value;
+        weightInput.value = value;
+        updatePerKg();
+    }
+
+    function updatePerKg() {
+        const weight = parseFloat(weightInput.value) || 70;
+        const protein = parseFloat(proteinInput.value) || 0;
+        const fat = parseFloat(fatInput.value) || 0;
+        const carbs = parseFloat(carbsInput.value) || 0;
+
+        document.getElementById('proteinPerKg').textContent = (protein / weight).toFixed(1);
+        document.getElementById('fatPerKg').textContent = (fat / weight).toFixed(1);
+        document.getElementById('carbsPerKg').textContent = (carbs / weight).toFixed(1);
+    }
+
+    function calculateCalories() {
+        const protein = parseFloat(proteinInput.value) || 0;
+        const fat = parseFloat(fatInput.value) || 0;
+        const carbs = parseFloat(carbsInput.value) || 0;
+
+        const calories = (protein * 4) + (fat * 9) + (carbs * 4);
+        caloriesDisplay.textContent = Math.round(calories);
+
+        updatePerKg();
+    }
+
+    weightSlider.addEventListener('input', (e) => updateWeight(e.target.value));
+    weightInput.addEventListener('input', (e) => updateWeight(e.target.value));
+
+    proteinInput.addEventListener('input', calculateCalories);
+    fatInput.addEventListener('input', calculateCalories);
+    carbsInput.addEventListener('input', calculateCalories);
+
+    // Инициализация
+    updatePerKg();
+});
+</script>
 {% endblock %}

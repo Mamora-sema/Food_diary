@@ -5,6 +5,7 @@ from datetime import datetime, date, timedelta
 from config import Config
 from models import db, User, Product, MealEntry, DailyGoal, Recipe, RecipeIngredient
 
+
 app = Flask(__name__)
 app.config.from_object(Config)
 db.init_app(app)
@@ -16,7 +17,6 @@ login_manager.login_view = 'login'
 login_manager.login_message = 'Пожалуйста, войдите в систему'
 login_manager.login_message_category = 'warning'
 
-# Add timedelta to Jinja2 globals
 app.jinja_env.globals['timedelta'] = timedelta
 
 
@@ -34,12 +34,28 @@ MEAL_TYPES = {
 
 
 # =====================================================
+# MIDDLEWARE - проверка первоначальной настройки
+# =====================================================
+
+@app.before_request
+def check_setup():
+    """Redirect to setup if user hasn't completed initial setup"""
+    if current_user.is_authenticated:
+        allowed_endpoints = ['setup', 'logout', 'static', 'api_sync_all']
+        if request.endpoint and request.endpoint not in allowed_endpoints:
+            if not current_user.is_setup_complete:
+                return redirect(url_for('setup'))
+
+
+# =====================================================
 # AUTHENTICATION ROUTES
 # =====================================================
 
 @app.route('/login', methods=['GET', 'POST'])
 def login():
     if current_user.is_authenticated:
+        if not current_user.is_setup_complete:
+            return redirect(url_for('setup'))
         return redirect(url_for('index'))
 
     if request.method == 'POST':
@@ -55,7 +71,9 @@ def login():
 
         if user and user.check_password(password):
             login_user(user, remember=remember)
-            flash(f'Добро пожаловать, {user.username}!', 'success')
+
+            if not user.is_setup_complete:
+                return redirect(url_for('setup'))
 
             next_page = request.args.get('next')
             return redirect(next_page if next_page else url_for('index'))
@@ -64,6 +82,36 @@ def login():
             return redirect(url_for('login'))
 
     return render_template('auth/login.html')
+
+@app.route('/delete_account', methods=['GET', 'POST'])
+@login_required
+def delete_account():
+    """Страница подтверждения и удаление аккаунта"""
+    if request.method == 'POST':
+        confirm_username = request.form.get('confirm_username', '').strip()
+
+        # Требуем ввести логин для подтверждения
+        if confirm_username != current_user.username:
+            flash('Логин введён неверно. Аккаунт не удалён.', 'error')
+            return redirect(url_for('delete_account'))
+
+        try:
+            # Сохраняем объект пользователя до logout
+            user = current_user
+            # Выходим из аккаунта (очищаем сессию)
+            logout_user()
+            # Удаляем пользователя (через каскад удалятся продукты, записи, рецепты, цели)
+            db.session.delete(user)
+            db.session.commit()
+            flash('Аккаунт и все данные удалены без возможности восстановления.', 'success')
+            return redirect(url_for('login'))
+        except Exception as e:
+            db.session.rollback()
+            flash('Ошибка при удалении аккаунта. Попробуйте позже.', 'error')
+            return redirect(url_for('settings'))
+
+    # GET — просто показываем страницу подтверждения
+    return render_template('auth/delete_account.html')
 
 
 @app.route('/register', methods=['GET', 'POST'])
@@ -97,18 +145,66 @@ def register():
             flash('Пользователь с таким логином уже существует', 'error')
             return redirect(url_for('register'))
 
-        user = User(username=username)
+        user = User(username=username, is_setup_complete=False)
         user.set_password(password)
         db.session.add(user)
         db.session.commit()
 
-        # Create default products for new user
-        create_default_products(user.id)
-
-        flash('Регистрация успешна! Теперь войдите в систему', 'success')
-        return redirect(url_for('login'))
+        login_user(user)
+        return redirect(url_for('setup'))
 
     return render_template('auth/register.html')
+
+
+@app.route('/setup', methods=['GET', 'POST'])
+@login_required
+def setup():
+    """Initial setup - set weight and daily goals"""
+    if current_user.is_setup_complete:
+        return redirect(url_for('index'))
+
+    if request.method == 'POST':
+        # Получаем вес
+        weight = float(request.form.get('weight', 70))
+        activity = request.form.get('activity', 'moderate')
+
+        # Сохраняем вес пользователя
+        current_user.weight = weight
+
+        # Получаем БЖУ
+        use_calculated = request.form.get('use_calculated', 'true') == 'true'
+
+        if use_calculated:
+            recommended = DailyGoal.calculate_recommended(weight, activity)
+            protein = recommended['protein']
+            fat = recommended['fat']
+            carbs = recommended['carbs']
+        else:
+            protein = float(request.form.get('protein', 50))
+            fat = float(request.form.get('fat', 65))
+            carbs = float(request.form.get('carbs', 300))
+
+        calories = DailyGoal.calculate_calories(protein, fat, carbs)
+
+        goal = DailyGoal.query.filter_by(user_id=current_user.id).first()
+        if not goal:
+            goal = DailyGoal(user_id=current_user.id)
+            db.session.add(goal)
+
+        goal.protein = protein
+        goal.fat = fat
+        goal.carbs = carbs
+        goal.calories = calories
+
+        create_default_products(current_user.id)
+
+        current_user.is_setup_complete = True
+        db.session.commit()
+
+        flash(f'Настройка завершена! Ваша норма: {int(calories)} ккал/день', 'success')
+        return redirect(url_for('index'))
+
+    return render_template('auth/setup.html')
 
 
 @app.route('/logout')
@@ -120,116 +216,180 @@ def logout():
 
 
 # =====================================================
-# HELPER FUNCTIONS
+# API - СИНХРОНИЗАЦИЯ
 # =====================================================
 
-def get_daily_summary(target_date, user_id):
-    """Calculate daily nutritional summary for a user"""
-    entries = MealEntry.query.filter_by(date=target_date, user_id=user_id).all()
-    goals = DailyGoal.get_goals(user_id)
+@app.route('/api/sync', methods=['GET', 'POST'])
+@login_required
+def api_sync_all():
+    if request.method == 'GET':
+        products = Product.query.filter_by(user_id=current_user.id).all()
+        recipes = Recipe.query.filter_by(user_id=current_user.id).all()
+        goals = DailyGoal.get_goals(current_user.id)
 
-    totals = {'calories': 0, 'protein': 0, 'fat': 0, 'carbs': 0}
-    meals = {meal_type: [] for meal_type in MEAL_TYPES.keys()}
-    meal_totals = {meal_type: {'calories': 0, 'protein': 0, 'fat': 0, 'carbs': 0}
-                   for meal_type in MEAL_TYPES.keys()}
+        start_date = date.today() - timedelta(days=30)
+        entries = MealEntry.query.filter(
+            MealEntry.user_id == current_user.id,
+            MealEntry.date >= start_date
+        ).all()
 
-    for entry in entries:
-        nutrition = entry.nutrition
-        meals[entry.meal_type].append({
-            'id': entry.id,
-            'product': entry.product,
-            'weight': entry.weight,
-            'nutrition': nutrition
+        return jsonify({
+            'success': True,
+            'timestamp': datetime.utcnow().isoformat(),
+            'data': {
+                'user': {
+                    'id': current_user.id,
+                    'username': current_user.username,
+                    'weight': current_user.weight,
+                    'is_setup_complete': current_user.is_setup_complete
+                },
+                'products': [p.to_dict() for p in products],
+                'recipes': [r.to_dict() for r in recipes],
+                'goals': goals.to_dict(),
+                'entries': [e.to_dict() for e in entries],
+                'meal_types': MEAL_TYPES
+            }
         })
 
-        for key in totals:
-            totals[key] += nutrition[key]
-            meal_totals[entry.meal_type][key] += nutrition[key]
+    elif request.method == 'POST':
+        try:
+            data = request.get_json()
 
-    for key in totals:
-        totals[key] = round(totals[key], 1)
+            if 'user_weight' in data:
+                current_user.weight = float(data['user_weight'])
 
-    percentages = {
-        'calories': round((totals['calories'] / goals.calories) * 100, 1) if goals.calories else 0,
-        'protein': round((totals['protein'] / goals.protein) * 100, 1) if goals.protein else 0,
-        'fat': round((totals['fat'] / goals.fat) * 100, 1) if goals.fat else 0,
-        'carbs': round((totals['carbs'] / goals.carbs) * 100, 1) if goals.carbs else 0
-    }
+            new_entries = data.get('new_entries', [])
+            for entry_data in new_entries:
+                entry = MealEntry(
+                    user_id=current_user.id,
+                    product_id=entry_data['product_id'],
+                    meal_type=entry_data['meal_type'],
+                    weight=entry_data['weight'],
+                    date=datetime.strptime(entry_data['date'], '%Y-%m-%d').date()
+                )
+                db.session.add(entry)
 
-    total_macros = totals['protein'] + totals['fat'] + totals['carbs']
-    if total_macros > 0:
-        macro_breakdown = {
-            'protein': round((totals['protein'] / total_macros) * 100, 1),
-            'fat': round((totals['fat'] / total_macros) * 100, 1),
-            'carbs': round((totals['carbs'] / total_macros) * 100, 1)
-        }
-    else:
-        macro_breakdown = {'protein': 0, 'fat': 0, 'carbs': 0}
+            deleted_entries = data.get('deleted_entries', [])
+            for entry_id in deleted_entries:
+                entry = MealEntry.query.filter_by(id=entry_id, user_id=current_user.id).first()
+                if entry:
+                    db.session.delete(entry)
 
-    calories_from_protein = totals['protein'] * 4
-    calories_from_fat = totals['fat'] * 9
-    calories_from_carbs = totals['carbs'] * 4
-    total_calculated_calories = calories_from_protein + calories_from_fat + calories_from_carbs
+            new_products = data.get('new_products', [])
+            created_products = []
+            for prod_data in new_products:
+                product = Product(
+                    user_id=current_user.id,
+                    name=prod_data['name'],
+                    calories=prod_data['calories'],
+                    protein=prod_data['protein'],
+                    fat=prod_data['fat'],
+                    carbs=prod_data['carbs'],
+                    is_recipe=prod_data.get('is_recipe', False)
+                )
+                db.session.add(product)
+                db.session.flush()
+                created_products.append(product.to_dict())
 
-    if total_calculated_calories > 0:
-        calorie_breakdown = {
-            'protein': round((calories_from_protein / total_calculated_calories) * 100, 1),
-            'fat': round((calories_from_fat / total_calculated_calories) * 100, 1),
-            'carbs': round((calories_from_carbs / total_calculated_calories) * 100, 1)
-        }
-    else:
-        calorie_breakdown = {'protein': 0, 'fat': 0, 'carbs': 0}
+            deleted_products = data.get('deleted_products', [])
+            for prod_id in deleted_products:
+                product = Product.query.filter_by(id=prod_id, user_id=current_user.id).first()
+                if product:
+                    db.session.delete(product)
 
-    return {
-        'date': target_date,
-        'meals': meals,
-        'meal_totals': meal_totals,
-        'totals': totals,
-        'goals': goals,
-        'percentages': percentages,
-        'macro_breakdown': macro_breakdown,
-        'calorie_breakdown': calorie_breakdown,
-        'remaining': {
-            'calories': round(goals.calories - totals['calories'], 1),
-            'protein': round(goals.protein - totals['protein'], 1),
-            'fat': round(goals.fat - totals['fat'], 1),
-            'carbs': round(goals.carbs - totals['carbs'], 1)
-        }
-    }
+            if 'goals' in data:
+                goals = DailyGoal.get_goals(current_user.id)
+                goals.protein = data['goals']['protein']
+                goals.fat = data['goals']['fat']
+                goals.carbs = data['goals']['carbs']
+                goals.calories = DailyGoal.calculate_calories(
+                    data['goals']['protein'],
+                    data['goals']['fat'],
+                    data['goals']['carbs']
+                )
+
+            db.session.commit()
+
+            return jsonify({
+                'success': True,
+                'created_products': created_products,
+                'message': 'Синхронизация успешна'
+            })
+
+        except Exception as e:
+            db.session.rollback()
+            return jsonify({'success': False, 'error': str(e)}), 500
 
 
-def create_default_products(user_id):
-    """Create default products for a new user"""
-    default_products = [
-        ('Куриная грудка', 165, 31, 3.6, 0),
-        ('Рис белый', 130, 2.7, 0.3, 28),
-        ('Яйцо куриное', 155, 13, 11, 1.1),
-        ('Овсянка', 68, 2.4, 1.4, 12),
-        ('Банан', 89, 1.1, 0.3, 23),
-        ('Творог 5%', 121, 17, 5, 1.8),
-        ('Гречка', 110, 4.2, 1.1, 21),
-        ('Молоко 2.5%', 52, 2.8, 2.5, 4.7),
-        ('Хлеб белый', 265, 9, 3.2, 49),
-        ('Яблоко', 52, 0.3, 0.2, 14),
-        ('Говядина', 250, 26, 15, 0),
-        ('Лосось', 208, 20, 13, 0),
-        ('Картофель', 77, 2, 0.1, 17),
-        ('Макароны', 131, 5, 1.1, 25),
-        ('Сыр твердый', 402, 25, 33, 1.3),
-    ]
+@app.route('/api/add_entry', methods=['POST'])
+@login_required
+def api_add_entry():
+    try:
+        data = request.get_json()
+        entry = MealEntry(
+            user_id=current_user.id,
+            product_id=data['product_id'],
+            meal_type=data['meal_type'],
+            weight=data['weight'],
+            date=datetime.strptime(data['date'], '%Y-%m-%d').date()
+        )
+        db.session.add(entry)
+        db.session.commit()
 
-    for name, cal, prot, fat, carbs in default_products:
+        return jsonify({
+            'success': True,
+            'entry': entry.to_dict()
+        })
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+@app.route('/api/delete_entry/<int:entry_id>', methods=['DELETE'])
+@login_required
+def api_delete_entry(entry_id):
+    try:
+        entry = MealEntry.query.filter_by(id=entry_id, user_id=current_user.id).first()
+        if entry:
+            db.session.delete(entry)
+            db.session.commit()
+            return jsonify({'success': True})
+        return jsonify({'success': False, 'error': 'Not found'}), 404
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+@app.route('/api/add_product', methods=['POST'])
+@login_required
+def api_add_product():
+    try:
+        data = request.get_json()
+
+        protein = float(data['protein'])
+        fat = float(data['fat'])
+        carbs = float(data['carbs'])
+        calories = DailyGoal.calculate_calories(protein, fat, carbs)
+
         product = Product(
-            user_id=user_id,
-            name=name,
-            calories=cal,
-            protein=prot,
+            user_id=current_user.id,
+            name=data['name'],
+            calories=calories,
+            protein=protein,
             fat=fat,
-            carbs=carbs
+            carbs=carbs,
+            is_recipe=data.get('is_recipe', False)
         )
         db.session.add(product)
+        db.session.commit()
 
-    db.session.commit()
+        return jsonify({
+            'success': True,
+            'product': product.to_dict()
+        })
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({'success': False, 'error': str(e)}), 500
 
 
 # =====================================================
@@ -245,73 +405,11 @@ def index():
     else:
         target_date = date.today()
 
-    summary = get_daily_summary(target_date, current_user.id)
-    products = Product.query.filter_by(user_id=current_user.id).order_by(Product.name).all()
-
     return render_template('index.html',
-                           summary=summary,
+                           target_date=target_date,
                            meal_types=MEAL_TYPES,
-                           products=products,
                            today=date.today())
 
-
-@app.route('/add_meal', methods=['GET', 'POST'])
-@login_required
-def add_meal():
-    if request.method == 'POST':
-        product_id = request.form.get('product_id')
-        meal_type = request.form.get('meal_type')
-        weight = request.form.get('weight', 100)
-        meal_date = request.form.get('date', date.today().isoformat())
-
-        if not product_id or not meal_type:
-            flash('Выберите продукт и тип приема пищи', 'error')
-            return redirect(url_for('add_meal'))
-
-        # Verify product belongs to user
-        product = Product.query.filter_by(id=int(product_id), user_id=current_user.id).first()
-        if not product:
-            flash('Продукт не найден', 'error')
-            return redirect(url_for('index'))
-
-        entry = MealEntry(
-            user_id=current_user.id,
-            product_id=int(product_id),
-            meal_type=meal_type,
-            weight=float(weight),
-            date=datetime.strptime(meal_date, '%Y-%m-%d').date()
-        )
-        db.session.add(entry)
-        db.session.commit()
-
-        flash('Продукт добавлен!', 'success')
-        return redirect(url_for('index', date=meal_date))
-
-    products = Product.query.filter_by(user_id=current_user.id).order_by(Product.name).all()
-    meal_date = request.args.get('date', date.today().isoformat())
-    meal_type = request.args.get('meal_type', 'breakfast')
-
-    return render_template('add_meal.html',
-                           products=products,
-                           meal_types=MEAL_TYPES,
-                           selected_date=meal_date,
-                           selected_meal_type=meal_type)
-
-
-@app.route('/delete_meal/<int:entry_id>', methods=['POST'])
-@login_required
-def delete_meal(entry_id):
-    entry = MealEntry.query.filter_by(id=entry_id, user_id=current_user.id).first_or_404()
-    meal_date = entry.date.isoformat()
-    db.session.delete(entry)
-    db.session.commit()
-    flash('Запись удалена', 'success')
-    return redirect(url_for('index', date=meal_date))
-
-
-# =====================================================
-# PRODUCTS ROUTES
-# =====================================================
 
 @app.route('/products')
 @login_required
@@ -325,31 +423,20 @@ def products():
 def add_product():
     if request.method == 'POST':
         name = request.form.get('name')
-        calories = request.form.get('calories')
-        protein = request.form.get('protein')
-        fat = request.form.get('fat')
-        carbs = request.form.get('carbs')
+        protein = float(request.form.get('protein', 0))
+        fat = float(request.form.get('fat', 0))
+        carbs = float(request.form.get('carbs', 0))
 
         serving_type = request.form.get('serving_type', '100')
-        custom_serving = request.form.get('custom_serving', '100')
+        custom_serving = float(request.form.get('custom_serving', 100))
 
-        if not all([name, calories, protein, fat, carbs]):
-            flash('Заполните все поля', 'error')
-            return redirect(url_for('add_product'))
+        if serving_type == 'custom' and custom_serving > 0:
+            multiplier = 100 / custom_serving
+            protein = round(protein * multiplier, 1)
+            fat = round(fat * multiplier, 1)
+            carbs = round(carbs * multiplier, 1)
 
-        calories = float(calories)
-        protein = float(protein)
-        fat = float(fat)
-        carbs = float(carbs)
-
-        if serving_type == 'custom':
-            serving_size = float(custom_serving)
-            if serving_size > 0:
-                multiplier = 100 / serving_size
-                calories = round(calories * multiplier, 1)
-                protein = round(protein * multiplier, 1)
-                fat = round(fat * multiplier, 1)
-                carbs = round(carbs * multiplier, 1)
+        calories = DailyGoal.calculate_calories(protein, fat, carbs)
 
         product = Product(
             user_id=current_user.id,
@@ -362,7 +449,7 @@ def add_product():
         db.session.add(product)
         db.session.commit()
 
-        flash(f'Продукт "{name}" добавлен!', 'success')
+        flash(f'Продукт "{name}" добавлен! ({int(calories)} ккал/100г)', 'success')
         return redirect(url_for('products'))
 
     return render_template('add_food.html')
@@ -374,34 +461,24 @@ def edit_product(product_id):
     product = Product.query.filter_by(id=product_id, user_id=current_user.id).first_or_404()
 
     if request.method == 'POST':
-        name = request.form.get('name')
-        calories = request.form.get('calories')
-        protein = request.form.get('protein')
-        fat = request.form.get('fat')
-        carbs = request.form.get('carbs')
+        protein = float(request.form.get('protein', 0))
+        fat = float(request.form.get('fat', 0))
+        carbs = float(request.form.get('carbs', 0))
 
         serving_type = request.form.get('serving_type', '100')
-        custom_serving = request.form.get('custom_serving', '100')
+        custom_serving = float(request.form.get('custom_serving', 100))
 
-        calories = float(calories)
-        protein = float(protein)
-        fat = float(fat)
-        carbs = float(carbs)
+        if serving_type == 'custom' and custom_serving > 0:
+            multiplier = 100 / custom_serving
+            protein = round(protein * multiplier, 1)
+            fat = round(fat * multiplier, 1)
+            carbs = round(carbs * multiplier, 1)
 
-        if serving_type == 'custom':
-            serving_size = float(custom_serving)
-            if serving_size > 0:
-                multiplier = 100 / serving_size
-                calories = round(calories * multiplier, 1)
-                protein = round(protein * multiplier, 1)
-                fat = round(fat * multiplier, 1)
-                carbs = round(carbs * multiplier, 1)
-
-        product.name = name
-        product.calories = calories
+        product.name = request.form.get('name')
         product.protein = protein
         product.fat = fat
         product.carbs = carbs
+        product.calories = DailyGoal.calculate_calories(protein, fat, carbs)
 
         db.session.commit()
         flash('Продукт обновлен!', 'success')
@@ -468,7 +545,7 @@ def add_recipe():
         nutrition = recipe.nutrition_per_100g
         product = Product(
             user_id=current_user.id,
-            name=f"{name}",
+            name=name,
             calories=nutrition['calories'],
             protein=nutrition['protein'],
             fat=nutrition['fat'],
@@ -481,11 +558,11 @@ def add_recipe():
         recipe.product_id = product.id
         db.session.commit()
 
-        flash(f'Рецепт "{name}" создан и добавлен в продукты!', 'success')
+        flash(f'Рецепт "{name}" создан!', 'success')
         return redirect(url_for('recipes'))
 
-    products = Product.query.filter_by(user_id=current_user.id, is_recipe=False).order_by(Product.name).all()
-    return render_template('add_recipe.html', products=products)
+    products_list = Product.query.filter_by(user_id=current_user.id, is_recipe=False).order_by(Product.name).all()
+    return render_template('add_recipe.html', products=products_list)
 
 
 @app.route('/view_recipe/<int:recipe_id>')
@@ -525,6 +602,8 @@ def edit_recipe(recipe_id):
                 )
                 db.session.add(ingredient)
 
+        db.session.flush()
+
         if recipe.product:
             nutrition = recipe.nutrition_per_100g
             recipe.product.name = name
@@ -537,27 +616,24 @@ def edit_recipe(recipe_id):
         flash('Рецепт обновлен!', 'success')
         return redirect(url_for('recipes'))
 
-    products = Product.query.filter_by(user_id=current_user.id, is_recipe=False).order_by(Product.name).all()
-    return render_template('add_recipe.html', recipe=recipe, products=products, edit=True)
+    products_list = Product.query.filter_by(user_id=current_user.id, is_recipe=False).order_by(Product.name).all()
+    return render_template('add_recipe.html', recipe=recipe, products=products_list, edit=True)
 
 
 @app.route('/delete_recipe/<int:recipe_id>', methods=['POST'])
 @login_required
 def delete_recipe(recipe_id):
     recipe = Recipe.query.filter_by(id=recipe_id, user_id=current_user.id).first_or_404()
-
     if recipe.product:
         db.session.delete(recipe.product)
-
     db.session.delete(recipe)
     db.session.commit()
-
     flash('Рецепт удален', 'success')
     return redirect(url_for('recipes'))
 
 
 # =====================================================
-# SUMMARY & SETTINGS ROUTES
+# SUMMARY & SETTINGS
 # =====================================================
 
 @app.route('/daily_summary')
@@ -569,10 +645,8 @@ def daily_summary():
     else:
         target_date = date.today()
 
-    summary = get_daily_summary(target_date, current_user.id)
-
     return render_template('daily_summary.html',
-                           summary=summary,
+                           target_date=target_date,
                            meal_types=MEAL_TYPES)
 
 
@@ -582,54 +656,90 @@ def settings():
     goals = DailyGoal.get_goals(current_user.id)
 
     if request.method == 'POST':
-        goals.calories = float(request.form.get('calories', 2000))
-        goals.protein = float(request.form.get('protein', 50))
-        goals.fat = float(request.form.get('fat', 65))
-        goals.carbs = float(request.form.get('carbs', 300))
+        weight = float(request.form.get('weight', current_user.weight))
+        current_user.weight = weight
+
+        protein = float(request.form.get('protein', 50))
+        fat = float(request.form.get('fat', 65))
+        carbs = float(request.form.get('carbs', 300))
+
+        goals.protein = protein
+        goals.fat = fat
+        goals.carbs = carbs
+        goals.calories = DailyGoal.calculate_calories(protein, fat, carbs)
 
         db.session.commit()
-        flash('Настройки сохранены!', 'success')
+        flash(f'Настройки сохранены! Норма: {int(goals.calories)} ккал/день', 'success')
         return redirect(url_for('settings'))
 
     return render_template('settings.html', goals=goals)
 
 
-# =====================================================
-# API ROUTES
-# =====================================================
-
-@app.route('/api/product/<int:product_id>')
+@app.route('/change_password', methods=['GET', 'POST'])
 @login_required
-def api_product(product_id):
-    product = Product.query.filter_by(id=product_id, user_id=current_user.id).first_or_404()
-    weight = request.args.get('weight', 100, type=float)
-    nutrition = product.get_nutrition_for_weight(weight)
+def change_password():
+    if request.method == 'POST':
+        current_password = request.form.get('current_password')
+        new_password = request.form.get('new_password')
+        confirm_password = request.form.get('confirm_password')
 
-    return jsonify({
-        'id': product.id,
-        'name': product.name,
-        'weight': weight,
-        'nutrition': nutrition
-    })
+        if not current_user.check_password(current_password):
+            flash('Текущий пароль введен неверно', 'error')
+            return redirect(url_for('change_password'))
+
+        if new_password != confirm_password:
+            flash('Новые пароли не совпадают', 'error')
+            return redirect(url_for('change_password'))
+
+        if len(new_password) < 4:
+            flash('Пароль должен быть не менее 4 символов', 'error')
+            return redirect(url_for('change_password'))
+
+        current_user.set_password(new_password)
+        db.session.commit()
+        flash('Пароль успешно изменен!', 'success')
+        return redirect(url_for('settings'))
+
+    return render_template('auth/change_password.html')
 
 
-@app.route('/api/search_products')
-@login_required
-def api_search_products():
-    query = request.args.get('q', '')
-    products = Product.query.filter(
-        Product.user_id == current_user.id,
-        Product.name.ilike(f'%{query}%')
-    ).limit(10).all()
+# =====================================================
+# HELPER FUNCTIONS
+# =====================================================
 
-    return jsonify([{
-        'id': p.id,
-        'name': p.name,
-        'calories': p.calories,
-        'protein': p.protein,
-        'fat': p.fat,
-        'carbs': p.carbs
-    } for p in products])
+def create_default_products(user_id):
+    """Create default products for a new user"""
+    default_products = [
+        ('Куриная грудка', 31, 3.6, 0),
+        ('Рис белый', 2.7, 0.3, 28),
+        ('Яйцо куриное', 13, 11, 1.1),
+        ('Овсянка', 2.4, 1.4, 12),
+        ('Банан', 1.1, 0.3, 23),
+        ('Творог 5%', 17, 5, 1.8),
+        ('Гречка', 4.2, 1.1, 21),
+        ('Молоко 2.5%', 2.8, 2.5, 4.7),
+        ('Хлеб белый', 9, 3.2, 49),
+        ('Яблоко', 0.3, 0.2, 14),
+        ('Говядина', 26, 15, 0),
+        ('Лосось', 20, 13, 0),
+        ('Картофель', 2, 0.1, 17),
+        ('Макароны', 5, 1.1, 25),
+        ('Сыр твердый', 25, 33, 1.3),
+    ]
+
+    for name, protein, fat, carbs in default_products:
+        calories = DailyGoal.calculate_calories(protein, fat, carbs)
+        product = Product(
+            user_id=user_id,
+            name=name,
+            calories=calories,
+            protein=protein,
+            fat=fat,
+            carbs=carbs
+        )
+        db.session.add(product)
+
+    db.session.commit()
 
 
 # =====================================================

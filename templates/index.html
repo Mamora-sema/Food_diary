@@ -1,7 +1,7 @@
 <!-- templates/index.html -->
 {% extends "base.html" %}
 
-{% block title %}Дневник питания - {{ summary.date.strftime('%d.%m.%Y') }}{% endblock %}
+{% block title %}Дневник питания - {{ target_date.strftime('%d.%m.%Y') }}{% endblock %}
 
 {% block content %}
 <div class="row">
@@ -10,7 +10,7 @@
         <div class="card mb-3 date-nav">
             <div class="card-body py-2">
                 <div class="d-flex justify-content-between align-items-center">
-                    <a href="{{ url_for('index', date=(summary.date - timedelta(days=1)).isoformat()) }}"
+                    <a href="{{ url_for('index', date=(target_date - timedelta(days=1)).isoformat()) }}"
                        class="btn btn-outline-secondary btn-sm">
                         <i class="bi bi-chevron-left"></i>
                         <span class="d-none d-sm-inline">Вчера</span>
@@ -18,19 +18,19 @@
 
                     <div class="text-center flex-grow-1 mx-2">
                         <h5 class="mb-0">
-                            {% if summary.date == today %}
+                            {% if target_date == today %}
                                 Сегодня
                             {% else %}
-                                {{ summary.date.strftime('%d.%m.%Y') }}
+                                {{ target_date.strftime('%d.%m.%Y') }}
                             {% endif %}
                         </h5>
                         <input type="date" class="form-control form-control-sm mt-1 mx-auto"
                                style="max-width: 140px;"
-                               id="dateSelector" value="{{ summary.date.isoformat() }}"
+                               id="dateSelector" value="{{ target_date.isoformat() }}"
                                onchange="window.location.href='?date=' + this.value">
                     </div>
 
-                    <a href="{{ url_for('index', date=(summary.date + timedelta(days=1)).isoformat()) }}"
+                    <a href="{{ url_for('index', date=(target_date + timedelta(days=1)).isoformat()) }}"
                        class="btn btn-outline-secondary btn-sm">
                         <span class="d-none d-sm-inline">Завтра</span>
                         <i class="bi bi-chevron-right"></i>
@@ -39,32 +39,34 @@
             </div>
         </div>
 
-        <!-- Краткая сводка для мобильных -->
-        <div class="card mb-3 d-lg-none">
+        <!-- Краткая сводка -->
+        <div class="card mb-3">
             <div class="card-body py-2">
-                <div class="row text-center">
+                <div class="row text-center" id="dailySummary">
                     <div class="col-3">
-                        <div class="fw-bold text-success">{{ summary.totals.calories|round(0)|int }}</div>
+                        <div class="fw-bold text-success" id="totalCalories">0</div>
                         <small class="text-muted">Ккал</small>
                     </div>
                     <div class="col-3">
-                        <div class="fw-bold text-danger">{{ summary.totals.protein|round(0)|int }}г</div>
+                        <div class="fw-bold text-danger" id="totalProtein">0г</div>
                         <small class="text-muted">Белки</small>
                     </div>
                     <div class="col-3">
-                        <div class="fw-bold text-warning">{{ summary.totals.fat|round(0)|int }}г</div>
+                        <div class="fw-bold text-warning" id="totalFat">0г</div>
                         <small class="text-muted">Жиры</small>
                     </div>
                     <div class="col-3">
-                        <div class="fw-bold text-primary">{{ summary.totals.carbs|round(0)|int }}г</div>
+                        <div class="fw-bold text-primary" id="totalCarbs">0г</div>
                         <small class="text-muted">Углев.</small>
                     </div>
                 </div>
                 <div class="progress mt-2" style="height: 6px;">
-                    <div class="progress-bar bg-success"
-                         style="width: {{ [summary.percentages.calories, 100]|min }}%"></div>
+                    <div class="progress-bar bg-success" id="caloriesProgress" style="width: 0%"></div>
                 </div>
-                <small class="text-muted">{{ summary.percentages.calories }}% от нормы ({{ summary.goals.calories|int }} ккал)</small>
+                <small class="text-muted">
+                    <span id="caloriesPercent">0</span>% от нормы
+                    (<span id="caloriesGoal">2000</span> ккал)
+                </small>
             </div>
         </div>
 
@@ -91,97 +93,22 @@
                     </h6>
                 </div>
 
-                <div class="d-flex align-items-center gap-2 meal-summary-inline">
-                    <span class="fw-bold">{{ summary.meal_totals[meal_key].calories|round(0)|int }}</span>
-                    <span class="text-danger">Б:{{ summary.meal_totals[meal_key].protein|round(0)|int }}</span>
-                    <span class="text-warning">Ж:{{ summary.meal_totals[meal_key].fat|round(0)|int }}</span>
-                    <span class="text-primary">У:{{ summary.meal_totals[meal_key].carbs|round(0)|int }}</span>
+                               <div class="d-flex align-items-center gap-2 meal-summary-inline">
+                    <span class="fw-bold" id="meal-{{ meal_key }}-calories">0</span>
+                    <span class="text-danger" id="meal-{{ meal_key }}-protein">Б:0</span>
+                    <span class="text-warning" id="meal-{{ meal_key }}-fat">Ж:0</span>
+                    <span class="text-primary" id="meal-{{ meal_key }}-carbs">У:0</span>
                 </div>
             </div>
 
             <div class="collapse show" id="collapse-{{ meal_key }}">
                 <div class="card-body py-2 px-2 px-sm-3">
-                    {% if summary.meals[meal_key] %}
-                        <!-- Мобильный вид - карточки -->
-                        <div class="d-md-none">
-                            {% for item in summary.meals[meal_key] %}
-                            <div class="d-flex justify-content-between align-items-center py-2 border-bottom">
-                                <div class="flex-grow-1">
-                                    <div class="fw-medium">
-                                        {{ item.product.name }}
-                                        {% if item.product.is_recipe %}
-                                        <i class="bi bi-book text-warning small"></i>
-                                        {% endif %}
-                                    </div>
-                                    <small class="text-muted">
-                                        {{ item.weight|int }}г ·
-                                        <span class="text-danger">Б:{{ item.nutrition.protein|round(0)|int }}</span>
-                                        <span class="text-warning">Ж:{{ item.nutrition.fat|round(0)|int }}</span>
-                                        <span class="text-primary">У:{{ item.nutrition.carbs|round(0)|int }}</span>
-                                    </small>
-                                </div>
-                                <div class="d-flex align-items-center gap-2">
-                                    <span class="fw-bold">{{ item.nutrition.calories|round(0)|int }}</span>
-                                    <form action="{{ url_for('delete_meal', entry_id=item.id) }}"
-                                          method="POST" class="d-inline">
-                                        <button type="submit" class="btn btn-sm btn-link text-danger p-0"
-                                                onclick="return confirm('Удалить?')">
-                                            <i class="bi bi-x-lg"></i>
-                                        </button>
-                                    </form>
-                                </div>
-                            </div>
-                            {% endfor %}
-                        </div>
-
-                        <!-- Десктопный вид - таблица -->
-                        <div class="d-none d-md-block">
-                            <table class="table table-sm table-hover mb-2">
-                                <thead>
-                                    <tr class="small text-muted">
-                                        <th>Продукт</th>
-                                        <th class="text-center">Вес</th>
-                                        <th class="text-center">Б</th>
-                                        <th class="text-center">Ж</th>
-                                        <th class="text-center">У</th>
-                                        <th class="text-center">Ккал</th>
-                                        <th></th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    {% for item in summary.meals[meal_key] %}
-                                    <tr>
-                                        <td>
-                                            {{ item.product.name }}
-                                            {% if item.product.is_recipe %}
-                                            <i class="bi bi-book text-warning small"></i>
-                                            {% endif %}
-                                        </td>
-                                        <td class="text-center text-muted">{{ item.weight|int }}г</td>
-                                        <td class="text-center text-danger">{{ item.nutrition.protein|round(1) }}</td>
-                                        <td class="text-center text-warning">{{ item.nutrition.fat|round(1) }}</td>
-                                        <td class="text-center text-primary">{{ item.nutrition.carbs|round(1) }}</td>
-                                        <td class="text-center fw-bold">{{ item.nutrition.calories|round(0)|int }}</td>
-                                        <td class="text-end">
-                                            <form action="{{ url_for('delete_meal', entry_id=item.id) }}"
-                                                  method="POST" class="d-inline">
-                                                <button type="submit" class="btn btn-sm btn-outline-danger py-0 px-1"
-                                                        onclick="return confirm('Удалить?')">
-                                                    <i class="bi bi-x"></i>
-                                                </button>
-                                            </form>
-                                        </td>
-                                    </tr>
-                                    {% endfor %}
-                                </tbody>
-                            </table>
-                        </div>
-                    {% else %}
-                        <p class="text-muted small mb-2 text-center">Нет записей</p>
-                    {% endif %}
+                    <div id="entries-{{ meal_key }}">
+                        <p class="text-muted small mb-2 text-center">Загрузка...</p>
+                    </div>
 
                     <div class="text-center">
-                        <button class="btn btn-sm btn-outline-success"
+                        <button class="btn btn-sm btn-outline-success add-meal-btn"
                                 data-bs-toggle="modal" data-bs-target="#addMealModal"
                                 data-meal-type="{{ meal_key }}"
                                 onclick="event.stopPropagation();">
@@ -205,24 +132,24 @@
                 <div class="mb-3">
                     <div class="d-flex justify-content-between">
                         <span>Калории</span>
-                        <span class="fw-bold">{{ summary.totals.calories|round(0)|int }} / {{ summary.goals.calories|int }}</span>
+                        <span class="fw-bold">
+                            <span id="sidebar-calories">0</span> / <span id="sidebar-calories-goal">2000</span>
+                        </span>
                     </div>
                     <div class="progress" style="height: 10px;">
-                        <div class="progress-bar bg-success"
-                             style="width: {{ [summary.percentages.calories, 100]|min }}%"></div>
+                        <div class="progress-bar bg-success" id="sidebar-calories-progress" style="width: 0%"></div>
                     </div>
-                    <small class="text-muted">{{ summary.percentages.calories }}% от нормы</small>
+                    <small class="text-muted"><span id="sidebar-calories-percent">0</span>% от нормы</small>
                 </div>
 
                 <!-- Белки -->
                 <div class="mb-3">
                     <div class="d-flex justify-content-between">
                         <span class="text-danger"><i class="bi bi-circle-fill"></i> Белки</span>
-                        <span>{{ summary.totals.protein|round(1) }} / {{ summary.goals.protein|int }} г</span>
+                        <span><span id="sidebar-protein">0</span> / <span id="sidebar-protein-goal">50</span> г</span>
                     </div>
                     <div class="progress" style="height: 8px;">
-                        <div class="progress-bar bg-danger"
-                             style="width: {{ [summary.percentages.protein, 100]|min }}%"></div>
+                        <div class="progress-bar bg-danger" id="sidebar-protein-progress" style="width: 0%"></div>
                     </div>
                 </div>
 
@@ -230,11 +157,10 @@
                 <div class="mb-3">
                     <div class="d-flex justify-content-between">
                         <span class="text-warning"><i class="bi bi-circle-fill"></i> Жиры</span>
-                        <span>{{ summary.totals.fat|round(1) }} / {{ summary.goals.fat|int }} г</span>
+                        <span><span id="sidebar-fat">0</span> / <span id="sidebar-fat-goal">65</span> г</span>
                     </div>
                     <div class="progress" style="height: 8px;">
-                        <div class="progress-bar bg-warning"
-                             style="width: {{ [summary.percentages.fat, 100]|min }}%"></div>
+                        <div class="progress-bar bg-warning" id="sidebar-fat-progress" style="width: 0%"></div>
                     </div>
                 </div>
 
@@ -242,11 +168,10 @@
                 <div class="mb-3">
                     <div class="d-flex justify-content-between">
                         <span class="text-primary"><i class="bi bi-circle-fill"></i> Углеводы</span>
-                        <span>{{ summary.totals.carbs|round(1) }} / {{ summary.goals.carbs|int }} г</span>
+                        <span><span id="sidebar-carbs">0</span> / <span id="sidebar-carbs-goal">300</span> г</span>
                     </div>
                     <div class="progress" style="height: 8px;">
-                        <div class="progress-bar bg-primary"
-                             style="width: {{ [summary.percentages.carbs, 100]|min }}%"></div>
+                        <div class="progress-bar bg-primary" id="sidebar-carbs-progress" style="width: 0%"></div>
                     </div>
                 </div>
 
@@ -255,25 +180,19 @@
                 <!-- Соотношение БЖУ -->
                 <h6>Соотношение БЖУ</h6>
                 <div class="progress" style="height: 20px;">
-                    <div class="progress-bar bg-danger" style="width: {{ summary.macro_breakdown.protein }}%">
-                        {% if summary.macro_breakdown.protein > 15 %}{{ summary.macro_breakdown.protein|round(0)|int }}%{% endif %}
-                    </div>
-                    <div class="progress-bar bg-warning" style="width: {{ summary.macro_breakdown.fat }}%">
-                        {% if summary.macro_breakdown.fat > 15 %}{{ summary.macro_breakdown.fat|round(0)|int }}%{% endif %}
-                    </div>
-                    <div class="progress-bar bg-primary" style="width: {{ summary.macro_breakdown.carbs }}%">
-                        {% if summary.macro_breakdown.carbs > 15 %}{{ summary.macro_breakdown.carbs|round(0)|int }}%{% endif %}
-                    </div>
+                    <div class="progress-bar bg-danger" id="macro-protein-bar" style="width: 33%"></div>
+                    <div class="progress-bar bg-warning" id="macro-fat-bar" style="width: 33%"></div>
+                    <div class="progress-bar bg-primary" id="macro-carbs-bar" style="width: 34%"></div>
                 </div>
                 <div class="d-flex justify-content-between mt-1 small text-muted">
-                    <span>Б: {{ summary.macro_breakdown.protein }}%</span>
-                    <span>Ж: {{ summary.macro_breakdown.fat }}%</span>
-                    <span>У: {{ summary.macro_breakdown.carbs }}%</span>
+                    <span>Б: <span id="macro-protein-percent">0</span>%</span>
+                    <span>Ж: <span id="macro-fat-percent">0</span>%</span>
+                    <span>У: <span id="macro-carbs-percent">0</span>%</span>
                 </div>
 
                 <hr>
 
-                <a href="{{ url_for('daily_summary', date=summary.date.isoformat()) }}"
+                <a href="{{ url_for('daily_summary', date=target_date.isoformat()) }}"
                    class="btn btn-outline-success w-100">
                     <i class="bi bi-bar-chart"></i> Подробная сводка
                 </a>
@@ -284,15 +203,15 @@
 
 <!-- Модальное окно добавления -->
 <div class="modal fade" id="addMealModal" tabindex="-1">
-    <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-dialog modal-dialog-centered modal-fullscreen-sm-down">
         <div class="modal-content">
             <div class="modal-header bg-success text-white py-2">
                 <h5 class="modal-title"><i class="bi bi-plus-circle"></i> Добавить</h5>
                 <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
             </div>
-            <form action="{{ url_for('add_meal') }}" method="POST">
+            <form id="addMealForm">
                 <div class="modal-body">
-                    <input type="hidden" name="date" value="{{ summary.date.isoformat() }}">
+                    <input type="hidden" name="date" id="mealDate" value="{{ target_date.isoformat() }}">
 
                     <div class="mb-3">
                         <label class="form-label">Приём пищи</label>
@@ -305,33 +224,49 @@
 
                     <div class="mb-3">
                         <label class="form-label">Продукт</label>
-                        <input type="text" id="productSearch" class="form-control mb-2"
-                               placeholder="🔍 Поиск...">
-                        <select name="product_id" id="productSelect" class="form-select" required size="5">
-                            {% for product in products %}
-                            <option value="{{ product.id }}"
-                                    data-calories="{{ product.calories }}"
-                                    data-protein="{{ product.protein }}"
-                                    data-fat="{{ product.fat }}"
-                                    data-carbs="{{ product.carbs }}">
-                                {{ product.name }} ({{ product.calories|round(0)|int }} ккал)
-                            </option>
-                            {% endfor %}
-                        </select>
+
+                        <!-- Поиск -->
+                        <div class="input-group mb-2">
+                            <span class="input-group-text"><i class="bi bi-search"></i></span>
+                            <input type="text" id="productSearch" class="form-control"
+                                   placeholder="Введите название..." autocomplete="off"
+                                   autocorrect="off" autocapitalize="off" spellcheck="false">
+                            <button type="button" class="btn btn-outline-secondary" id="clearSearch" style="display:none;">
+                                <i class="bi bi-x"></i>
+                            </button>
+                        </div>
+
+                        <!-- Список продуктов (кастомный, не select) -->
+                        <div id="productListContainer" class="border rounded" style="max-height: 200px; overflow-y: auto;">
+                            <div id="productList" class="list-group list-group-flush">
+                                <!-- Продукты будут добавлены через JS -->
+                            </div>
+                        </div>
+
+                        <!-- Выбранный продукт -->
+                        <input type="hidden" name="product_id" id="selectedProductId" required>
+                        <div id="selectedProductDisplay" class="alert alert-success py-2 mt-2" style="display:none;">
+                            <div class="d-flex justify-content-between align-items-center">
+                                <span id="selectedProductName"></span>
+                                <button type="button" class="btn btn-sm btn-outline-danger" id="removeSelectedProduct">
+                                    <i class="bi bi-x"></i>
+                                </button>
+                            </div>
+                        </div>
                     </div>
 
                     <div class="mb-3">
                         <label class="form-label">Количество</label>
                         <div class="d-flex gap-1 mb-2 flex-wrap">
                             <button type="button" class="btn btn-outline-secondary btn-sm weight-btn" data-weight="50">50г</button>
-                            <button type="button" class="btn btn-outline-secondary btn-sm weight-btn active" data-weight="100">100г</button>
+                            <button type="button" class="btn btn-sm weight-btn active btn-success" data-weight="100">100г</button>
                             <button type="button" class="btn btn-outline-secondary btn-sm weight-btn" data-weight="150">150г</button>
                             <button type="button" class="btn btn-outline-secondary btn-sm weight-btn" data-weight="200">200г</button>
                             <button type="button" class="btn btn-outline-secondary btn-sm weight-btn" data-weight="250">250г</button>
                         </div>
                         <div class="input-group">
                             <input type="number" name="weight" id="weightInput" class="form-control"
-                                   value="100" min="1" max="2000" required>
+                                   value="100" min="1" max="5000" required inputmode="numeric">
                             <span class="input-group-text">грамм</span>
                         </div>
                     </div>
@@ -365,7 +300,7 @@
                         <i class="bi bi-plus"></i> Новый продукт
                     </a>
                     <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Отмена</button>
-                    <button type="submit" class="btn btn-success">
+                    <button type="submit" class="btn btn-success" id="submitBtn" disabled>
                         <i class="bi bi-check-lg"></i> Добавить
                     </button>
                 </div>
@@ -373,34 +308,621 @@
         </div>
     </div>
 </div>
+
+<!-- Спиннер загрузки -->
+<div class="position-fixed top-50 start-50 translate-middle" id="loadingSpinner" style="display: none; z-index: 9999;">
+    <div class="spinner-border text-success" role="status">
+        <span class="visually-hidden">Загрузка...</span>
+    </div>
+</div>
 {% endblock %}
 
 {% block scripts %}
 <script>
-document.addEventListener('DOMContentLoaded', function() {
-    // Сворачивание приёмов пищи
-    document.querySelectorAll('[data-bs-toggle="collapse"]').forEach(function(header) {
-        const targetId = header.getAttribute('data-bs-target');
-        if (!targetId) return;
+// Текущая дата страницы
+const CURRENT_DATE = '{{ target_date.isoformat() }}';
+const MEAL_TYPES = {{ meal_types | tojson }};
 
-        const target = document.querySelector(targetId);
-        if (!target) return;
+// Данные приложения
+let appData = {
+    products: [],
+    entries: [],
+    goals: { calories: 2000, protein: 50, fat: 65, carbs: 300 },
+    user: { weight: 70 }
+};
 
-        const mealKey = targetId.replace('#collapse-', '');
-        const icon = document.getElementById('icon-' + mealKey);
+// Выбранный продукт
+let selectedProduct = null;
 
-        if (icon) {
-            target.addEventListener('show.bs.collapse', function() {
-                icon.classList.remove('bi-chevron-right');
-                icon.classList.add('bi-chevron-down');
+// =====================================================
+// ЗАГРУЗКА ДАННЫХ
+// =====================================================
+
+async function loadData() {
+    showLoading(true);
+    try {
+        const response = await fetch('/api/sync');
+        const result = await response.json();
+
+        if (result.success) {
+            appData.products = result.data.products || [];
+            appData.entries = result.data.entries || [];
+            appData.goals = result.data.goals || appData.goals;
+            appData.user = result.data.user || appData.user;
+
+            localStorage.setItem('appData', JSON.stringify(appData));
+            localStorage.setItem('appDataTime', Date.now().toString());
+
+            renderAll();
+        }
+    } catch (error) {
+        console.error('Load error:', error);
+        const cached = localStorage.getItem('appData');
+        if (cached) {
+            appData = JSON.parse(cached);
+            renderAll();
+            showToast('Работа в оффлайн режиме', 'warning');
+        }
+    }
+    showLoading(false);
+}
+
+// =====================================================
+// ОТРИСОВКА
+// =====================================================
+
+function renderAll() {
+    renderProductList();
+    renderEntries();
+    updateSummary();
+}
+
+function renderProductList(filter = '') {
+    const container = document.getElementById('productList');
+    if (!container) return;
+
+    const filterLower = filter.toLowerCase().trim();
+
+    let filtered = appData.products;
+    if (filterLower) {
+        filtered = appData.products.filter(p =>
+            p.name.toLowerCase().includes(filterLower)
+        );
+    }
+
+    if (filtered.length === 0) {
+        container.innerHTML = `
+            <div class="list-group-item text-center text-muted py-3">
+                ${filterLower ? 'Ничего не найдено' : 'Нет продуктов'}
+            </div>
+        `;
+        return;
+    }
+
+    container.innerHTML = filtered.map(product => `
+        <button type="button" class="list-group-item list-group-item-action product-item py-2"
+                data-id="${product.id}"
+                data-name="${escapeHtml(product.name)}"
+                data-calories="${product.calories}"
+                data-protein="${product.protein}"
+                data-fat="${product.fat}"
+                data-carbs="${product.carbs}">
+            <div class="d-flex justify-content-between align-items-center">
+                <div>
+                    <span class="fw-medium">${escapeHtml(product.name)}</span>
+                    ${product.is_recipe ? '<i class="bi bi-book text-warning ms-1"></i>' : ''}
+                </div>
+                <small class="text-muted">${Math.round(product.calories)} ккал</small>
+            </div>
+            <small class="text-muted">
+                Б:${product.protein} Ж:${product.fat} У:${product.carbs}
+            </small>
+        </button>
+    `).join('');
+
+    // Привязываем обработчики
+    container.querySelectorAll('.product-item').forEach(item => {
+        item.addEventListener('click', function(e) {
+            e.preventDefault();
+            e.stopPropagation();
+            selectProduct(this);
+        });
+    });
+}
+
+function selectProduct(element) {
+    const id = parseInt(element.dataset.id);
+    const name = element.dataset.name;
+    const calories = parseFloat(element.dataset.calories);
+    const protein = parseFloat(element.dataset.protein);
+    const fat = parseFloat(element.dataset.fat);
+    const carbs = parseFloat(element.dataset.carbs);
+
+    selectedProduct = { id, name, calories, protein, fat, carbs };
+
+    // Обновляем UI
+    document.getElementById('selectedProductId').value = id;
+    document.getElementById('selectedProductName').textContent = name;
+    document.getElementById('selectedProductDisplay').style.display = 'block';
+    document.getElementById('productListContainer').style.display = 'none';
+    document.getElementById('productSearch').value = '';
+    document.getElementById('clearSearch').style.display = 'none';
+    document.getElementById('submitBtn').disabled = false;
+
+    updatePreview();
+}
+
+function removeSelectedProduct() {
+    selectedProduct = null;
+    document.getElementById('selectedProductId').value = '';
+    document.getElementById('selectedProductDisplay').style.display = 'none';
+    document.getElementById('productListContainer').style.display = 'block';
+    document.getElementById('submitBtn').disabled = true;
+    renderProductList();
+    updatePreview();
+}
+
+function renderEntries() {
+    const todayEntries = appData.entries.filter(e => e.date === CURRENT_DATE);
+
+    const grouped = {};
+    Object.keys(MEAL_TYPES).forEach(type => {
+        grouped[type] = todayEntries.filter(e => e.meal_type === type);
+    });
+
+    Object.keys(MEAL_TYPES).forEach(mealType => {
+        const container = document.getElementById(`entries-${mealType}`);
+        if (!container) return;
+
+        const entries = grouped[mealType];
+
+        if (entries.length === 0) {
+            container.innerHTML = '<p class="text-muted small mb-2 text-center">Нет записей</p>';
+        } else {
+            container.innerHTML = entries.map(entry => renderEntry(entry)).join('');
+        }
+
+        updateMealTotal(mealType, entries);
+    });
+}
+
+function renderEntry(entry) {
+    const nutrition = entry.nutrition || calculateNutrition(entry);
+    return `
+        <div class="d-flex justify-content-between align-items-center py-2 border-bottom entry-row" data-id="${entry.id}">
+            <div class="flex-grow-1 pe-2">
+                <div class="fw-medium text-truncate" style="max-width: 180px;">
+                    ${escapeHtml(entry.product_name)}
+                </div>
+                <small class="text-muted">
+                    ${entry.weight}г ·
+                    <span class="text-danger">Б:${Math.round(nutrition.protein)}</span>
+                    <span class="text-warning">Ж:${Math.round(nutrition.fat)}</span>
+                    <span class="text-primary">У:${Math.round(nutrition.carbs)}</span>
+                </small>
+            </div>
+            <div class="d-flex align-items-center gap-2">
+                <span class="fw-bold">${Math.round(nutrition.calories)}</span>
+                <button type="button" class="btn btn-sm btn-link text-danger p-0 delete-entry-btn"
+                        data-id="${entry.id}">
+                    <i class="bi bi-x-lg"></i>
+                </button>
+            </div>
+        </div>
+    `;
+}
+
+function calculateNutrition(entry) {
+    const product = appData.products.find(p => p.id === entry.product_id);
+    if (!product) return { calories: 0, protein: 0, fat: 0, carbs: 0 };
+
+    const multiplier = entry.weight / 100;
+    return {
+        calories: product.calories * multiplier,
+        protein: product.protein * multiplier,
+        fat: product.fat * multiplier,
+        carbs: product.carbs * multiplier
+    };
+}
+
+function updateMealTotal(mealType, entries) {
+    const totals = entries.reduce((sum, entry) => {
+        const nutrition = entry.nutrition || calculateNutrition(entry);
+        return {
+            calories: sum.calories + nutrition.calories,
+            protein: sum.protein + nutrition.protein,
+            fat: sum.fat + nutrition.fat,
+            carbs: sum.carbs + nutrition.carbs
+        };
+    }, { calories: 0, protein: 0, fat: 0, carbs: 0 });
+
+    const calEl = document.getElementById(`meal-${mealType}-calories`);
+    const protEl = document.getElementById(`meal-${mealType}-protein`);
+    const fatEl = document.getElementById(`meal-${mealType}-fat`);
+    const carbsEl = document.getElementById(`meal-${mealType}-carbs`);
+
+    if (calEl) calEl.textContent = Math.round(totals.calories);
+    if (protEl) protEl.textContent = `Б:${Math.round(totals.protein)}`;
+    if (fatEl) fatEl.textContent = `Ж:${Math.round(totals.fat)}`;
+    if (carbsEl) carbsEl.textContent = `У:${Math.round(totals.carbs)}`;
+}
+
+function updateSummary() {
+    const todayEntries = appData.entries.filter(e => e.date === CURRENT_DATE);
+
+    const totals = todayEntries.reduce((sum, entry) => {
+        const nutrition = entry.nutrition || calculateNutrition(entry);
+        return {
+            calories: sum.calories + nutrition.calories,
+            protein: sum.protein + nutrition.protein,
+            fat: sum.fat + nutrition.fat,
+            carbs: sum.carbs + nutrition.carbs
+        };
+    }, { calories: 0, protein: 0, fat: 0, carbs: 0 });
+
+    const goals = appData.goals;
+
+    // Краткая сводка
+    const totalCalEl = document.getElementById('totalCalories');
+    const totalProtEl = document.getElementById('totalProtein');
+    const totalFatEl = document.getElementById('totalFat');
+    const totalCarbsEl = document.getElementById('totalCarbs');
+
+    if (totalCalEl) totalCalEl.textContent = Math.round(totals.calories);
+    if (totalProtEl) totalProtEl.textContent = `${Math.round(totals.protein)}г`;
+    if (totalFatEl) totalFatEl.textContent = `${Math.round(totals.fat)}г`;
+    if (totalCarbsEl) totalCarbsEl.textContent = `${Math.round(totals.carbs)}г`;
+
+    const caloriesPercent = Math.min(100, Math.round((totals.calories / goals.calories) * 100));
+
+    const progressEl = document.getElementById('caloriesProgress');
+    const percentEl = document.getElementById('caloriesPercent');
+    const goalEl = document.getElementById('caloriesGoal');
+
+    if (progressEl) progressEl.style.width = `${caloriesPercent}%`;
+    if (percentEl) percentEl.textContent = caloriesPercent;
+    if (goalEl) goalEl.textContent = Math.round(goals.calories);
+
+    // Боковая панель (если есть)
+    updateSidebarIfExists(totals, goals);
+}
+
+function updateSidebarIfExists(totals, goals) {
+    const elements = {
+        'sidebar-calories': Math.round(totals.calories),
+        'sidebar-calories-goal': Math.round(goals.calories),
+        'sidebar-protein': totals.protein.toFixed(1),
+        'sidebar-protein-goal': Math.round(goals.protein),
+        'sidebar-fat': totals.fat.toFixed(1),
+        'sidebar-fat-goal': Math.round(goals.fat),
+        'sidebar-carbs': totals.carbs.toFixed(1),
+        'sidebar-carbs-goal': Math.round(goals.carbs)
+    };
+
+    for (const [id, value] of Object.entries(elements)) {
+        const el = document.getElementById(id);
+        if (el) el.textContent = value;
+    }
+
+    const caloriesPercent = Math.min(100, (totals.calories / goals.calories) * 100);
+    const progressBars = {
+        'sidebar-calories-progress': caloriesPercent,
+        'sidebar-protein-progress': Math.min(100, (totals.protein / goals.protein) * 100),
+        'sidebar-fat-progress': Math.min(100, (totals.fat / goals.fat) * 100),
+        'sidebar-carbs-progress': Math.min(100, (totals.carbs / goals.carbs) * 100)
+    };
+
+    for (const [id, width] of Object.entries(progressBars)) {
+        const el = document.getElementById(id);
+        if (el) el.style.width = `${width}%`;
+    }
+
+    const percentEl = document.getElementById('sidebar-calories-percent');
+    if (percentEl) percentEl.textContent = Math.round(caloriesPercent);
+
+    // Соотношение БЖУ
+    const totalMacros = totals.protein + totals.fat + totals.carbs;
+    if (totalMacros > 0) {
+        const proteinPercent = Math.round((totals.protein / totalMacros) * 100);
+        const fatPercent = Math.round((totals.fat / totalMacros) * 100);
+        const carbsPercent = 100 - proteinPercent - fatPercent;
+
+        const macroElements = {
+            'macro-protein-bar': proteinPercent,
+            'macro-fat-bar': fatPercent,
+            'macro-carbs-bar': carbsPercent
+        };
+
+        for (const [id, width] of Object.entries(macroElements)) {
+            const el = document.getElementById(id);
+            if (el) el.style.width = `${width}%`;
+        }
+
+        const percentElements = {
+            'macro-protein-percent': proteinPercent,
+            'macro-fat-percent': fatPercent,
+            'macro-carbs-percent': carbsPercent
+        };
+
+        for (const [id, value] of Object.entries(percentElements)) {
+            const el = document.getElementById(id);
+            if (el) el.textContent = value;
+        }
+    }
+}
+
+function updatePreview() {
+    const weight = parseFloat(document.getElementById('weightInput').value) || 0;
+
+    let calories = 0, protein = 0, fat = 0, carbs = 0;
+
+    if (selectedProduct && weight > 0) {
+        const multiplier = weight / 100;
+        calories = Math.round(selectedProduct.calories * multiplier);
+        protein = (selectedProduct.protein * multiplier).toFixed(1);
+        fat = (selectedProduct.fat * multiplier).toFixed(1);
+        carbs = (selectedProduct.carbs * multiplier).toFixed(1);
+    }
+
+    document.getElementById('previewCalories').textContent = calories;
+    document.getElementById('previewProtein').textContent = protein;
+    document.getElementById('previewFat').textContent = fat;
+    document.getElementById('previewCarbs').textContent = carbs;
+}
+
+// =====================================================
+// ДОБАВЛЕНИЕ ЗАПИСИ
+// =====================================================
+
+document.getElementById('addMealForm').addEventListener('submit', async function(e) {
+    e.preventDefault();
+
+    const productId = parseInt(document.getElementById('selectedProductId').value);
+    const mealType = document.getElementById('modalMealType').value;
+    const weight = parseFloat(document.getElementById('weightInput').value);
+
+    if (!productId || !weight) {
+        showToast('Выберите продукт и укажите вес', 'error');
+        return;
+    }
+
+    showLoading(true);
+
+    try {
+        const response = await fetch('/api/add_entry', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                product_id: productId,
+                meal_type: mealType,
+                weight: weight,
+                date: CURRENT_DATE
+            })
+        });
+
+        const result = await response.json();
+
+        if (result.success) {
+            appData.entries.push(result.entry);
+            localStorage.setItem('appData', JSON.stringify(appData));
+
+            renderEntries();
+            updateSummary();
+
+            bootstrap.Modal.getInstance(document.getElementById('addMealModal')).hide();
+
+            showToast('Добавлено!', 'success');
+        } else {
+            throw new Error(result.error);
+        }
+    } catch (error) {
+        console.error('Add entry error:', error);
+        showToast('Ошибка добавления', 'error');
+    }
+
+    showLoading(false);
+});
+
+// =====================================================
+// УДАЛЕНИЕ ЗАПИСИ
+// =====================================================
+
+document.addEventListener('click', async function(e) {
+    if (e.target.closest('.delete-entry-btn')) {
+        const btn = e.target.closest('.delete-entry-btn');
+        const entryId = parseInt(btn.dataset.id);
+
+        if (!confirm('Удалить запись?')) return;
+
+        showLoading(true);
+
+        try {
+            const response = await fetch(`/api/delete_entry/${entryId}`, {
+                method: 'DELETE'
             });
 
-            target.addEventListener('hide.bs.collapse', function() {
-                icon.classList.remove('bi-chevron-down');
-                icon.classList.add('bi-chevron-right');
-            });
+            if (response.ok) {
+                appData.entries = appData.entries.filter(e => e.id !== entryId);
+                localStorage.setItem('appData', JSON.stringify(appData));
+
+                renderEntries();
+                updateSummary();
+
+                showToast('Удалено', 'success');
+            }
+        } catch (error) {
+            console.error('Delete error:', error);
+            showToast('Ошибка удаления', 'error');
+        }
+
+        showLoading(false);
+    }
+});
+
+// =====================================================
+// ПОИСК ПРОДУКТОВ
+// =====================================================
+
+const productSearch = document.getElementById('productSearch');
+const clearSearchBtn = document.getElementById('clearSearch');
+let searchTimeout = null;
+
+if (productSearch) {
+    // Debounced search
+    productSearch.addEventListener('input', function() {
+        const value = this.value;
+
+        // Показать/скрыть кнопку очистки
+        clearSearchBtn.style.display = value ? 'block' : 'none';
+
+        // Debounce
+        if (searchTimeout) clearTimeout(searchTimeout);
+        searchTimeout = setTimeout(() => {
+            renderProductList(value);
+        }, 150);
+    });
+
+    // Предотвращаем закрытие при фокусе
+    productSearch.addEventListener('focus', function() {
+        if (!selectedProduct) {
+            document.getElementById('productListContainer').style.display = 'block';
         }
     });
+}
+
+if (clearSearchBtn) {
+    clearSearchBtn.addEventListener('click', function() {
+        productSearch.value = '';
+        this.style.display = 'none';
+        renderProductList();
+        productSearch.focus();
+    });
+}
+
+// Удаление выбранного продукта
+document.getElementById('removeSelectedProduct')?.addEventListener('click', removeSelectedProduct);
+
+// =====================================================
+// КНОПКИ ВЕСА
+// =====================================================
+
+document.querySelectorAll('.weight-btn').forEach(btn => {
+    btn.addEventListener('click', function(e) {
+        e.preventDefault();
+        const weight = this.dataset.weight;
+        document.getElementById('weightInput').value = weight;
+
+        document.querySelectorAll('.weight-btn').forEach(b => {
+            b.classList.remove('active', 'btn-success');
+            b.classList.add('btn-outline-secondary');
+        });
+        this.classList.remove('btn-outline-secondary');
+        this.classList.add('active', 'btn-success');
+
+        updatePreview();
+    });
 });
+
+document.getElementById('weightInput').addEventListener('input', updatePreview);
+
+// =====================================================
+// МОДАЛЬНОЕ ОКНО
+// =====================================================
+
+const addMealModal = document.getElementById('addMealModal');
+
+addMealModal.addEventListener('show.bs.modal', function(event) {
+    const button = event.relatedTarget;
+    if (button && button.dataset.mealType) {
+        document.getElementById('modalMealType').value = button.dataset.mealType;
+    }
+
+    // Сброс
+    removeSelectedProduct();
+    document.getElementById('weightInput').value = 100;
+    document.getElementById('productSearch').value = '';
+    document.getElementById('clearSearch').style.display = 'none';
+    document.getElementById('productListContainer').style.display = 'block';
+
+    document.querySelectorAll('.weight-btn').forEach(btn => {
+        btn.classList.remove('active', 'btn-success');
+        btn.classList.add('btn-outline-secondary');
+        if (btn.dataset.weight === '100') {
+            btn.classList.remove('btn-outline-secondary');
+            btn.classList.add('active', 'btn-success');
+        }
+    });
+
+    renderProductList();
+});
+
+addMealModal.addEventListener('shown.bs.modal', function() {
+    // Фокус на поиск после открытия
+    setTimeout(() => {
+        document.getElementById('productSearch').focus();
+    }, 100);
+});
+
+// =====================================================
+// СВОРАЧИВАНИЕ ПРИЁМОВ ПИЩИ
+// =====================================================
+
+document.querySelectorAll('[data-bs-toggle="collapse"]').forEach(function(header) {
+    const targetId = header.getAttribute('data-bs-target');
+    if (!targetId) return;
+
+    const target = document.querySelector(targetId);
+    if (!target) return;
+
+    const mealKey = targetId.replace('#collapse-', '');
+    const icon = document.getElementById('icon-' + mealKey);
+
+    if (icon) {
+        target.addEventListener('show.bs.collapse', () => {
+            icon.classList.remove('bi-chevron-right');
+            icon.classList.add('bi-chevron-down');
+        });
+
+        target.addEventListener('hide.bs.collapse', () => {
+            icon.classList.remove('bi-chevron-down');
+            icon.classList.add('bi-chevron-right');
+        });
+    }
+});
+
+// =====================================================
+// УТИЛИТЫ
+// =====================================================
+
+function showLoading(show) {
+    const spinner = document.getElementById('loadingSpinner');
+    if (spinner) spinner.style.display = show ? 'block' : 'none';
+}
+
+function showToast(message, type = 'info') {
+    const toast = document.createElement('div');
+    toast.className = `alert alert-${type === 'error' ? 'danger' : type} position-fixed shadow-lg`;
+    toast.style.cssText = 'bottom: 100px; left: 50%; transform: translateX(-50%); z-index: 9999; min-width: 200px; text-align: center;';
+    toast.textContent = message;
+    document.body.appendChild(toast);
+
+    setTimeout(() => {
+        toast.style.opacity = '0';
+        toast.style.transition = 'opacity 0.3s';
+        setTimeout(() => toast.remove(), 300);
+    }, 2500);
+}
+
+function escapeHtml(text) {
+    const div = document.createElement('div');
+    div.textContent = text;
+    return div.innerHTML;
+}
+
+// =====================================================
+// ИНИЦИАЛИЗАЦИЯ
+// =====================================================
+
+loadData();
 </script>
 {% endblock %}

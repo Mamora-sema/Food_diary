@@ -1,0 +1,455 @@
+<!-- templates/auth/setup.html -->
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta name="theme-color" content="#28a745">
+    <title>Настройка - Дневник питания</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.0/font/bootstrap-icons.css" rel="stylesheet">
+    <style>
+        body {
+            background: linear-gradient(135deg, #28a745 0%, #20c997 100%);
+            min-height: 100vh;
+            padding: 1rem;
+        }
+        .setup-card {
+            max-width: 600px;
+            margin: 0 auto;
+            border-radius: 20px;
+            box-shadow: 0 15px 35px rgba(0,0,0,0.2);
+            overflow: hidden;
+        }
+        .setup-header {
+            background: linear-gradient(135deg, #28a745 0%, #20c997 100%);
+            padding: 1.5rem;
+            text-align: center;
+            color: white;
+        }
+        .step-indicator {
+            display: flex;
+            justify-content: center;
+            gap: 0.5rem;
+            margin-bottom: 1rem;
+        }
+        .step-dot {
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            background: rgba(255,255,255,0.3);
+        }
+        .step-dot.active {
+            background: white;
+        }
+        .weight-display {
+            font-size: 4rem;
+            font-weight: bold;
+            color: #28a745;
+            line-height: 1;
+        }
+        .weight-slider {
+            width: 100%;
+            height: 8px;
+            -webkit-appearance: none;
+            background: #e9ecef;
+            border-radius: 4px;
+            outline: none;
+        }
+        .weight-slider::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            width: 28px;
+            height: 28px;
+            background: linear-gradient(135deg, #28a745 0%, #20c997 100%);
+            border-radius: 50%;
+            cursor: pointer;
+            box-shadow: 0 2px 6px rgba(0,0,0,0.2);
+        }
+        .activity-card {
+            border: 2px solid #e9ecef;
+            border-radius: 12px;
+            padding: 1rem;
+            cursor: pointer;
+            transition: all 0.2s;
+            text-align: center;
+        }
+        .activity-card:hover {
+            border-color: #28a745;
+        }
+        .activity-card.selected {
+            border-color: #28a745;
+            background: rgba(40, 167, 69, 0.1);
+        }
+        .activity-card input {
+            display: none;
+        }
+        .macro-input {
+            text-align: center;
+            font-size: 1.3rem;
+            font-weight: bold;
+            border: 2px solid #e9ecef;
+            border-radius: 10px;
+        }
+        .macro-input:focus {
+            border-color: #28a745;
+        }
+        .calories-display {
+            background: linear-gradient(135deg, #28a745 0%, #20c997 100%);
+            color: white;
+            border-radius: 15px;
+            padding: 1.5rem;
+            text-align: center;
+        }
+        .calories-value {
+            font-size: 3rem;
+            font-weight: bold;
+            line-height: 1;
+        }
+        .btn-start {
+            background: linear-gradient(135deg, #28a745 0%, #20c997 100%);
+            border: none;
+            padding: 1rem 2rem;
+            font-size: 1.1rem;
+            border-radius: 50px;
+        }
+        .recommended-badge {
+            background: #ffc107;
+            color: #000;
+            font-size: 0.7rem;
+            padding: 0.2rem 0.5rem;
+            border-radius: 10px;
+            margin-left: 0.5rem;
+        }
+    </style>
+</head>
+<body>
+    <div class="card setup-card">
+        <div class="setup-header">
+            <div class="step-indicator">
+                <div class="step-dot active"></div>
+                <div class="step-dot" id="step2dot"></div>
+                <div class="step-dot" id="step3dot"></div>
+            </div>
+            <h3 class="mb-1">Добро пожаловать, {{ current_user.username }}!</h3>
+            <p class="mb-0 opacity-75">Давайте настроим ваш профиль</p>
+        </div>
+
+        <div class="card-body p-4">
+            <form method="POST" id="setupForm">
+                <!-- Шаг 1: Вес -->
+                <div id="step1">
+                    <h5 class="text-center mb-4">
+                        <i class="bi bi-person-standing text-success"></i> Ваш вес
+                    </h5>
+
+                    <div class="text-center mb-4">
+                        <div class="weight-display" id="weightDisplay">70</div>
+                        <div class="text-muted">кг</div>
+                    </div>
+
+                    <input type="range" class="weight-slider" id="weightSlider" name="weight"
+                           min="40" max="200" value="70" step="0.5">
+
+                    <div class="d-flex justify-content-between text-muted small mt-2">
+                        <span>40 кг</span>
+                        <span>200 кг</span>
+                    </div>
+
+                    <div class="text-center mt-3">
+                        <small class="text-muted">Или введите вручную:</small>
+                        <div class="input-group mx-auto mt-2" style="max-width: 150px;">
+                            <input type="number" class="form-control text-center" id="weightInput"
+                                   value="70" min="40" max="200" step="0.5">
+                            <span class="input-group-text">кг</span>
+                        </div>
+                    </div>
+
+                    <button type="button" class="btn btn-success w-100 mt-4" onclick="goToStep(2)">
+                        Далее <i class="bi bi-arrow-right"></i>
+                    </button>
+                </div>
+
+                <!-- Шаг 2: Активность -->
+                <div id="step2" style="display: none;">
+                    <h5 class="text-center mb-4">
+                        <i class="bi bi-activity text-success"></i> Уровень активности
+                    </h5>
+
+                    <div class="row g-3 mb-4">
+                        <div class="col-6">
+                            <label class="activity-card w-100">
+                                <input type="radio" name="activity" value="low">
+                                <div class="fs-2 mb-2">🧘</div>
+                                <div class="fw-bold">Низкий</div>
+                                <small class="text-muted">Сидячая работа</small>
+                            </label>
+                        </div>
+                        <div class="col-6">
+                            <label class="activity-card w-100 selected">
+                                <input type="radio" name="activity" value="moderate" checked>
+                                <div class="fs-2 mb-2">🚶</div>
+                                <div class="fw-bold">Средний</div>
+                                <small class="text-muted">1-3 тренировки/нед</small>
+                            </label>
+                        </div>
+                        <div class="col-6">
+                            <label class="activity-card w-100">
+                                <input type="radio" name="activity" value="high">
+                                <div class="fs-2 mb-2">🏃</div>
+                                <div class="fw-bold">Высокий</div>
+                                <small class="text-muted">4-5 тренировок/нед</small>
+                            </label>
+                        </div>
+                        <div class="col-6">
+                            <label class="activity-card w-100">
+                                <input type="radio" name="activity" value="athlete">
+                                <div class="fs-2 mb-2">🏋️</div>
+                                <div class="fw-bold">Атлет</div>
+                                <small class="text-muted">6+ тренировок/нед</small>
+                            </label>
+                        </div>
+                    </div>
+
+                    <div class="d-flex gap-2">
+                        <button type="button" class="btn btn-outline-secondary" onclick="goToStep(1)">
+                            <i class="bi bi-arrow-left"></i> Назад
+                        </button>
+                        <button type="button" class="btn btn-success flex-grow-1" onclick="goToStep(3)">
+                            Далее <i class="bi bi-arrow-right"></i>
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Шаг 3: БЖУ -->
+                <div id="step3" style="display: none;">
+                    <h5 class="text-center mb-3">
+                        <i class="bi bi-sliders text-success"></i> Ваша норма БЖУ
+                    </h5>
+
+                    <!-- Переключатель -->
+                    <div class="btn-group w-100 mb-4" role="group">
+                        <input type="radio" class="btn-check" name="use_calculated" id="useCalc" value="true" checked>
+                        <label class="btn btn-outline-success" for="useCalc">
+                            <i class="bi bi-magic"></i> Рассчитать
+                        </label>
+                        <input type="radio" class="btn-check" name="use_calculated" id="useManual" value="false">
+                        <label class="btn btn-outline-success" for="useManual">
+                            <i class="bi bi-pencil"></i> Вручную
+                        </label>
+                    </div>
+
+                    <!-- Рассчитанные значения -->
+                    <div id="calculatedSection">
+                        <div class="alert alert-success">
+                            <i class="bi bi-lightbulb"></i>
+                            Рекомендуемые значения на основе вашего веса (<span id="summaryWeight">70</span> кг)
+                            и уровня активности:
+                        </div>
+
+                        <div class="row g-3 mb-3">
+                            <div class="col-4 text-center">
+                                <div class="text-danger fs-3 fw-bold" id="recProtein">105</div>
+                                <small class="text-muted">Белки (г)</small>
+                                <div class="text-muted small" id="proteinPerKg">1.5 г/кг</div>
+                            </div>
+                            <div class="col-4 text-center">
+                                <div class="text-warning fs-3 fw-bold" id="recFat">70</div>
+                                <small class="text-muted">Жиры (г)</small>
+                                <div class="text-muted small" id="fatPerKg">1.0 г/кг</div>
+                            </div>
+                            <div class="col-4 text-center">
+                                <div class="text-primary fs-3 fw-bold" id="recCarbs">280</div>
+                                <small class="text-muted">Углеводы (г)</small>
+                                <div class="text-muted small" id="carbsPerKg">4.0 г/кг</div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Ручной ввод -->
+                    <div id="manualSection" style="display: none;">
+                        <div class="row g-3 mb-3">
+                            <div class="col-4">
+                                <label class="form-label text-center w-100">
+                                    <span class="text-danger">●</span> Белки
+                                </label>
+                                <input type="number" name="protein" id="manualProtein"
+                                       class="form-control macro-input text-danger" value="105">
+                            </div>
+                            <div class="col-4">
+                                <label class="form-label text-center w-100">
+                                    <span class="text-warning">●</span> Жиры
+                                </label>
+                                <input type="number" name="fat" id="manualFat"
+                                       class="form-control macro-input text-warning" value="70">
+                            </div>
+                            <div class="col-4">
+                                <label class="form-label text-center w-100">
+                                    <span class="text-primary">●</span> Углеводы
+                                </label>
+                                <input type="number" name="carbs" id="manualCarbs"
+                                       class="form-control macro-input text-primary" value="280">
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Формула -->
+                    <div class="text-center text-muted small mb-3">
+                        <i class="bi bi-calculator"></i>
+                        Калории = (Б × 4) + (Ж × 9) + (У × 4)
+                    </div>
+
+                    <!-- Итоговые калории -->
+                    <div class="calories-display mb-4">
+                        <div class="small opacity-75">Ваша дневная норма:</div>
+                        <div class="calories-value" id="totalCalories">2150</div>
+                        <div class="small opacity-75">ккал / день</div>
+                    </div>
+
+                    <div class="d-flex gap-2">
+                        <button type="button" class="btn btn-outline-secondary" onclick="goToStep(2)">
+                            <i class="bi bi-arrow-left"></i> Назад
+                        </button>
+                        <button type="submit" class="btn btn-start btn-success flex-grow-1 text-white">
+                            <i class="bi bi-check-lg me-2"></i>Начать!
+                        </button>
+                    </div>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <script>
+        // Коэффициенты для расчёта
+        const activityMultipliers = {
+            'low': { protein: 1.2, fat: 0.8, carbs: 3 },
+            'moderate': { protein: 1.5, fat: 1.0, carbs: 4 },
+            'high': { protein: 1.8, fat: 1.0, carbs: 5 },
+            'athlete': { protein: 2.2, fat: 1.2, carbs: 6 }
+        };
+
+        let currentWeight = 70;
+        let currentActivity = 'moderate';
+
+        // Синхронизация слайдера и инпута веса
+        const weightSlider = document.getElementById('weightSlider');
+        const weightInput = document.getElementById('weightInput');
+        const weightDisplay = document.getElementById('weightDisplay');
+
+        function updateWeight(value) {
+            currentWeight = parseFloat(value);
+            weightSlider.value = value;
+            weightInput.value = value;
+            weightDisplay.textContent = value;
+            updateRecommendations();
+        }
+
+        weightSlider.addEventListener('input', (e) => updateWeight(e.target.value));
+        weightInput.addEventListener('input', (e) => updateWeight(e.target.value));
+
+        // Выбор активности
+        document.querySelectorAll('.activity-card').forEach(card => {
+            card.addEventListener('click', function() {
+                document.querySelectorAll('.activity-card').forEach(c => c.classList.remove('selected'));
+                this.classList.add('selected');
+                currentActivity = this.querySelector('input').value;
+                updateRecommendations();
+            });
+        });
+
+        // Переключение ручной/авто
+        document.getElementById('useCalc').addEventListener('change', function() {
+            document.getElementById('calculatedSection').style.display = 'block';
+            document.getElementById('manualSection').style.display = 'none';
+            updateCalories();
+        });
+
+        document.getElementById('useManual').addEventListener('change', function() {
+            document.getElementById('calculatedSection').style.display = 'none';
+            document.getElementById('manualSection').style.display = 'block';
+            // Копируем рассчитанные значения в ручной ввод
+            document.getElementById('manualProtein').value = document.getElementById('recProtein').textContent;
+            document.getElementById('manualFat').value = document.getElementById('recFat').textContent;
+            document.getElementById('manualCarbs').value = document.getElementById('recCarbs').textContent;
+            updateCalories();
+        });
+
+        // Ручной ввод БЖУ
+        ['manualProtein', 'manualFat', 'manualCarbs'].forEach(id => {
+            document.getElementById(id).addEventListener('input', updateCalories);
+        });
+
+        // Обновление рекомендаций
+        function updateRecommendations() {
+            const mult = activityMultipliers[currentActivity];
+
+            const protein = Math.round(currentWeight * mult.protein);
+            const fat = Math.round(currentWeight * mult.fat);
+            const carbs = Math.round(currentWeight * mult.carbs);
+
+            document.getElementById('recProtein').textContent = protein;
+            document.getElementById('recFat').textContent = fat;
+            document.getElementById('recCarbs').textContent = carbs;
+
+            document.getElementById('proteinPerKg').textContent = mult.protein + ' г/кг';
+            document.getElementById('fatPerKg').textContent = mult.fat + ' г/кг';
+            document.getElementById('carbsPerKg').textContent = mult.carbs + ' г/кг';
+
+            document.getElementById('summaryWeight').textContent = currentWeight;
+
+            updateCalories();
+        }
+
+        // Расчёт калорий
+        function updateCalories() {
+            let protein, fat, carbs;
+
+            if (document.getElementById('useCalc').checked) {
+                protein = parseInt(document.getElementById('recProtein').textContent);
+                fat = parseInt(document.getElementById('recFat').textContent);
+                carbs = parseInt(document.getElementById('recCarbs').textContent);
+            } else {
+                protein = parseInt(document.getElementById('manualProtein').value) || 0;
+                fat = parseInt(document.getElementById('manualFat').value) || 0;
+                carbs = parseInt(document.getElementById('manualCarbs').value) || 0;
+            }
+
+            const calories = (protein * 4) + (fat * 9) + (carbs * 4);
+            document.getElementById('totalCalories').textContent = Math.round(calories);
+        }
+
+        // Навигация по шагам
+        function goToStep(step) {
+            document.getElementById('step1').style.display = step === 1 ? 'block' : 'none';
+            document.getElementById('step2').style.display = step === 2 ? 'block' : 'none';
+            document.getElementById('step3').style.display = step === 3 ? 'block' : 'none';
+
+            document.getElementById('step2dot').classList.toggle('active', step >= 2);
+            document.getElementById('step3dot').classList.toggle('active', step >= 3);
+
+            if (step === 3) {
+                updateRecommendations();
+            }
+        }
+
+        // Обработка отправки формы
+        document.getElementById('setupForm').addEventListener('submit', function(e) {
+            // Если используем расчётные значения, добавляем их в форму
+            if (document.getElementById('useCalc').checked) {
+                const protein = document.getElementById('recProtein').textContent;
+                const fat = document.getElementById('recFat').textContent;
+                const carbs = document.getElementById('recCarbs').textContent;
+
+                // Создаём скрытые поля
+                this.insertAdjacentHTML('beforeend', `
+                    <input type="hidden" name="protein" value="${protein}">
+                    <input type="hidden" name="fat" value="${fat}">
+                    <input type="hidden" name="carbs" value="${carbs}">
+                `);
+            }
+        });
+
+        // Инициализация
+        updateRecommendations();
+    </script>
+</body>
+</html>

@@ -1,0 +1,60 @@
+{% extends "base.html" %}
+{% block title %}Удаление аккаунта{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center">
+    <div class="col-md-7 col-lg-5">
+        <div class="card border-danger">
+            <div class="card-header bg-danger text-white">
+                <h5 class="mb-0">
+                    <i class="bi bi-exclamation-triangle-fill"></i>
+                    Удаление аккаунта
+                </h5>
+            </div>
+            <div class="card-body">
+                <div class="alert alert-warning">
+                    <h6 class="alert-heading">Внимание!</h6>
+                    <p class="mb-1">
+                        При удалении аккаунта будут безвозвратно удалены:
+                    </p>
+                    <ul class="mb-1">
+                        <li>Все записи о приёмах пищи</li>
+                        <li>Все ваши продукты и рецепты</li>
+                        <li>Ваши цели по калориям и БЖУ</li>
+                    </ul>
+                    <p class="mb-0 fw-bold">
+                        Это действие нельзя отменить.
+                    </p>
+                </div>
+
+                <form method="POST">
+                    <p class="mb-2">
+                        Для подтверждения удаления введите ваш логин:
+                    </p>
+                    <div class="mb-3">
+                        <label class="form-label">Логин</label>
+                        <input type="text"
+                               name="confirm_username"
+                               class="form-control"
+                               placeholder="{{ current_user.username }}"
+                               required>
+                    </div>
+
+                    <div class="d-flex flex-column flex-sm-row justify-content-between gap-2">
+                        <a href="{{ url_for('settings') }}" class="btn btn-outline-secondary flex-grow-1">
+                            Отмена
+                        </a>
+                        <button type="submit" class="btn btn-danger flex-grow-1"
+                                onclick="return confirm('Точно удалить аккаунт и ВСЕ данные без возможности восстановления?');">
+                            <i class="bi bi-trash"></i> Удалить аккаунт
+                        </button>
+                    </div>
+                </form>
+            </div>
+            <div class="card-footer small text-muted">
+                Вышли по ошибке? Просто закройте эту страницу.
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
