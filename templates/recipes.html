@@ -1,0 +1,93 @@
+<!-- templates/recipes.html -->
+{% extends "base.html" %}
+
+{% block title %}Книга рецептов{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h2><i class="bi bi-book"></i> Книга рецептов</h2>
+    <a href="{{ url_for('add_recipe') }}" class="btn btn-success">
+        <i class="bi bi-plus-lg"></i> Создать рецепт
+    </a>
+</div>
+
+{% if recipes %}
+<div class="row">
+    {% for recipe in recipes %}
+    <div class="col-md-6 col-lg-4 mb-4">
+        <div class="card h-100">
+            <div class="card-header bg-warning bg-opacity-25">
+                <h5 class="mb-0">
+                    <i class="bi bi-journal-richtext"></i> {{ recipe.name }}
+                </h5>
+            </div>
+            <div class="card-body">
+                {% if recipe.description %}
+                <p class="text-muted small">{{ recipe.description }}</p>
+                {% endif %}
+
+                <p class="mb-2"><strong>Ингредиенты:</strong></p>
+                <ul class="list-unstyled small">
+                    {% for ing in recipe.ingredients[:3] %}
+                    <li><i class="bi bi-dot"></i> {{ ing.product.name }} - {{ ing.weight|int }}г</li>
+                    {% endfor %}
+                    {% if recipe.ingredients|length > 3 %}
+                    <li class="text-muted">... и ещё {{ recipe.ingredients|length - 3 }}</li>
+                    {% endif %}
+                </ul>
+
+                <hr>
+
+                <div class="row text-center small">
+                    <div class="col-3">
+                        <div class="fw-bold">{{ recipe.nutrition_per_100g.calories|round(0)|int }}</div>
+                        <small class="text-muted">Ккал</small>
+                    </div>
+                    <div class="col-3">
+                        <div class="fw-bold text-danger">{{ recipe.nutrition_per_100g.protein|round(1) }}</div>
+                        <small class="text-muted">Белки</small>
+                    </div>
+                    <div class="col-3">
+                        <div class="fw-bold text-warning">{{ recipe.nutrition_per_100g.fat|round(1) }}</div>
+                        <small class="text-muted">Жиры</small>
+                    </div>
+                    <div class="col-3">
+                        <div class="fw-bold text-primary">{{ recipe.nutrition_per_100g.carbs|round(1) }}</div>
+                        <small class="text-muted">Углев.</small>
+                    </div>
+                </div>
+
+                <small class="text-muted d-block mt-2">
+                    <i class="bi bi-scale"></i> Общий вес: {{ recipe.total_weight|int }}г
+                </small>
+            </div>
+            <div class="card-footer bg-transparent">
+                <div class="btn-group w-100">
+                    <a href="{{ url_for('view_recipe', recipe_id=recipe.id) }}" class="btn btn-outline-primary btn-sm">
+                        <i class="bi bi-eye"></i> Просмотр
+                    </a>
+                    <a href="{{ url_for('edit_recipe', recipe_id=recipe.id) }}" class="btn btn-outline-secondary btn-sm">
+                        <i class="bi bi-pencil"></i> Изменить
+                    </a>
+                    <form action="{{ url_for('delete_recipe', recipe_id=recipe.id) }}" method="POST" class="d-inline">
+                        <button type="submit" class="btn btn-outline-danger btn-sm"
+                                onclick="return confirm('Удалить рецепт и связанный продукт?')">
+                            <i class="bi bi-trash"></i>
+                        </button>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+    {% endfor %}
+</div>
+{% else %}
+<div class="text-center py-5">
+    <i class="bi bi-book display-1 text-muted"></i>
+    <p class="text-muted mt-3">Нет созданных рецептов</p>
+    <a href="{{ url_for('add_recipe') }}" class="btn btn-success">
+        <i class="bi bi-plus-lg"></i> Создать первый рецепт
+    </a>
+</div>
+{% endif %}
+{% endblock %}

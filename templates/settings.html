@@ -1,0 +1,45 @@
+
+{% extends "base.html" %}
+
+{% block title %}Настройки{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center">
+    <div class="col-md-6">
+        <div class="card">
+            <div class="card-header bg-success text-white">
+                <h5 class="mb-0"><i class="bi bi-gear"></i> Настройки РСК</h5>
+            </div>
+            <div class="card-body">
+                <p class="text-muted">Установите ваши дневные цели по калориям и макронутриентам</p>
+                
+                <form method="POST">
+                    <div class="mb-3">
+                        <label class="form-label">Калории (ккал/день)</label>
+                        <input type="number" name="calories" class="form-control" value="{{ goals.calories|int }}" min="500" max="10000" required>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label class="form-label">Белки (г/день)</label>
+                        <input type="number" name="protein" class="form-control" value="{{ goals.protein|int }}" min="10" max="500" required>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label class="form-label">Жиры (г/день)</label>
+                        <input type="number" name="fat" class="form-control" value="{{ goals.fat|int }}" min="10" max="500" required>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label class="form-label">Углеводы (г/день)</label>
+                        <input type="number" name="carbs" class="form-control" value="{{ goals.carbs|int }}" min="10" max="1000" required>
+                    </div>
+                    
+                    <button type="submit" class="btn btn-success w-100">
+                        <i class="bi bi-check-lg"></i> Сохранить
+                    </button>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

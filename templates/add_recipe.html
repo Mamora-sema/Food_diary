@@ -1,0 +1,363 @@
+<!-- templates/add_recipe.html -->
+{% extends "base.html" %}
+
+{% block title %}{% if edit %}Редактировать{% else %}Создать{% endif %} рецепт{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-lg-8">
+        <div class="card">
+            <div class="card-header bg-warning bg-opacity-75">
+                <h5 class="mb-0">
+                    <i class="bi bi-{% if edit %}pencil{% else %}plus-circle{% endif %}"></i>
+                    {% if edit %}Редактировать{% else %}Создать{% endif %} рецепт
+                </h5>
+            </div>
+            <div class="card-body">
+                <form method="POST" id="recipeForm">
+                    <div class="mb-3">
+                        <label class="form-label">Название рецепта</label>
+                        <input type="text" name="name" class="form-control form-control-lg" required
+                               value="{{ recipe.name if recipe else '' }}"
+                               placeholder="Например: Овсянка с бананом">
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label">Описание (необязательно)</label>
+                        <textarea name="description" class="form-control" rows="2"
+                                  placeholder="Краткое описание рецепта...">{{ recipe.description if recipe else '' }}</textarea>
+                    </div>
+
+                    <hr>
+
+                    <h5><i class="bi bi-list-check"></i> Ингредиенты</h5>
+
+                    <div id="ingredientsList">
+                        {% if recipe and recipe.ingredients %}
+                            {% for ing in recipe.ingredients %}
+                            <div class="ingredient-row card bg-light mb-2">
+                                <div class="card-body py-2">
+                                    <div class="row align-items-center">
+                                        <div class="col-md-6">
+                                            <select name="product_id[]" class="form-select product-select" required>
+                                                <option value="">Выберите продукт...</option>
+                                                {% for product in products %}
+                                                <option value="{{ product.id }}"
+                                                        data-calories="{{ product.calories }}"
+                                                        data-protein="{{ product.protein }}"
+                                                        data-fat="{{ product.fat }}"
+                                                        data-carbs="{{ product.carbs }}"
+                                                        {% if product.id == ing.product_id %}selected{% endif %}>
+                                                    {{ product.name }}
+                                                </option>
+                                                {% endfor %}
+                                            </select>
+                                        </div>
+                                        <div class="col-md-4">
+                                            <div class="input-group">
+                                                <input type="number" name="weight[]" class="form-control weight-input"
+                                                       value="{{ ing.weight|int }}" min="1" required placeholder="Вес">
+                                                <span class="input-group-text">г</span>
+                                            </div>
+                                        </div>
+                                        <div class="col-md-2 text-end">
+                                            <button type="button" class="btn btn-outline-danger btn-sm remove-ingredient">
+                                                <i class="bi bi-trash"></i>
+                                            </button>
+                                        </div>
+                                    </div>
+                                    <div class="ingredient-nutrition small text-muted mt-1"></div>
+                                </div>
+                            </div>
+                            {% endfor %}
+                        {% else %}
+                            <div class="ingredient-row card bg-light mb-2">
+                                <div class="card-body py-2">
+                                    <div class="row align-items-center">
+                                        <div class="col-md-6">
+                                            <select name="product_id[]" class="form-select product-select" required>
+                                                <option value="">Выберите продукт...</option>
+                                                {% for product in products %}
+                                                <option value="{{ product.id }}"
+                                                        data-calories="{{ product.calories }}"
+                                                        data-protein="{{ product.protein }}"
+                                                        data-fat="{{ product.fat }}"
+                                                        data-carbs="{{ product.carbs }}">
+                                                    {{ product.name }}
+                                                </option>
+                                                {% endfor %}
+                                            </select>
+                                        </div>
+                                        <div class="col-md-4">
+                                            <div class="input-group">
+                                                <input type="number" name="weight[]" class="form-control weight-input"
+                                                       value="100" min="1" required placeholder="Вес">
+                                                <span class="input-group-text">г</span>
+                                            </div>
+                                        </div>
+                                        <div class="col-md-2 text-end">
+                                            <button type="button" class="btn btn-outline-danger btn-sm remove-ingredient">
+                                                <i class="bi bi-trash"></i>
+                                            </button>
+                                        </div>
+                                    </div>
+                                    <div class="ingredient-nutrition small text-muted mt-1"></div>
+                                </div>
+                            </div>
+                        {% endif %}
+                    </div>
+
+                    <button type="button" id="addIngredient" class="btn btn-outline-success mb-4">
+                        <i class="bi bi-plus-lg"></i> Добавить ингредиент
+                    </button>
+
+                    <hr>
+
+                    <div class="d-flex justify-content-between">
+                        <a href="{{ url_for('recipes') }}" class="btn btn-secondary">
+                            <i class="bi bi-arrow-left"></i> Назад
+                        </a>
+                        <button type="submit" class="btn btn-success btn-lg">
+                            <i class="bi bi-check-lg"></i>
+                            {% if edit %}Сохранить{% else %}Создать рецепт{% endif %}
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- Summary sidebar -->
+    <div class="col-lg-4">
+        <div class="card sticky-top" style="top: 20px;">
+            <div class="card-header bg-success text-white">
+                <h5 class="mb-0"><i class="bi bi-calculator"></i> Итого</h5>
+            </div>
+            <div class="card-body">
+                <div class="mb-3">
+                    <label class="text-muted">Общий вес:</label>
+                    <h4 id="totalWeight">0 г</h4>
+                </div>
+
+                <hr>
+
+                <h6>Пищевая ценность всего блюда:</h6>
+                <table class="table table-sm">
+                    <tr>
+                        <td>Калории</td>
+                        <td class="text-end fw-bold" id="totalCalories">0</td>
+                        <td>ккал</td>
+                    </tr>
+                    <tr>
+                        <td><span class="text-danger">●</span> Белки</td>
+                        <td class="text-end fw-bold" id="totalProtein">0</td>
+                        <td>г</td>
+                    </tr>
+                    <tr>
+                        <td><span class="text-warning">●</span> Жиры</td>
+                        <td class="text-end fw-bold" id="totalFat">0</td>
+                        <td>г</td>
+                    </tr>
+                    <tr>
+                        <td><span class="text-primary">●</span> Углеводы</td>
+                        <td class="text-end fw-bold" id="totalCarbs">0</td>
+                        <td>г</td>
+                    </tr>
+                </table>
+
+                <hr>
+
+                <h6>На 100 грамм:</h6>
+                <div class="row text-center">
+                    <div class="col-3">
+                        <div class="fw-bold fs-5" id="per100Calories">0</div>
+                        <small class="text-muted">Ккал</small>
+                    </div>
+                    <div class="col-3">
+                        <div class="fw-bold fs-5 text-danger" id="per100Protein">0</div>
+                        <small class="text-muted">Б</small>
+                    </div>
+                    <div class="col-3">
+                        <div class="fw-bold fs-5 text-warning" id="per100Fat">0</div>
+                        <small class="text-muted">Ж</small>
+                    </div>
+                    <div class="col-3">
+                        <div class="fw-bold fs-5 text-primary" id="per100Carbs">0</div>
+                        <small class="text-muted">У</small>
+                    </div>
+                </div>
+
+                <div class="alert alert-info mt-3 small">
+                    <i class="bi bi-info-circle"></i>
+                    Рецепт будет сохранен как новый продукт с КБЖУ на 100г
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Template for new ingredient -->
+<template id="ingredientTemplate">
+    <div class="ingredient-row card bg-light mb-2">
+        <div class="card-body py-2">
+            <div class="row align-items-center">
+                <div class="col-md-6">
+                    <select name="product_id[]" class="form-select product-select" required>
+                        <option value="">Выберите продукт...</option>
+                        {% for product in products %}
+                        <option value="{{ product.id }}"
+                                data-calories="{{ product.calories }}"
+                                data-protein="{{ product.protein }}"
+                                data-fat="{{ product.fat }}"
+                                data-carbs="{{ product.carbs }}">
+                            {{ product.name }}
+                        </option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="col-md-4">
+                    <div class="input-group">
+                        <input type="number" name="weight[]" class="form-control weight-input"
+                               value="100" min="1" required placeholder="Вес">
+                        <span class="input-group-text">г</span>
+                    </div>
+                </div>
+                <div class="col-md-2 text-end">
+                    <button type="button" class="btn btn-outline-danger btn-sm remove-ingredient">
+                        <i class="bi bi-trash"></i>
+                    </button>
+                </div>
+            </div>
+            <div class="ingredient-nutrition small text-muted mt-1"></div>
+        </div>
+    </div>
+</template>
+{% endblock %}
+
+{% block scripts %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const ingredientsList = document.getElementById('ingredientsList');
+    const addIngredientBtn = document.getElementById('addIngredient');
+    const template = document.getElementById('ingredientTemplate');
+
+    // Add new ingredient row
+    addIngredientBtn.addEventListener('click', function() {
+        const clone = template.content.cloneNode(true);
+        ingredientsList.appendChild(clone);
+        attachEventListeners();
+        updateTotals();
+    });
+
+    // Attach event listeners to ingredient rows
+    function attachEventListeners() {
+        // Remove ingredient buttons
+        document.querySelectorAll('.remove-ingredient').forEach(btn => {
+            btn.onclick = function() {
+                const rows = document.querySelectorAll('.ingredient-row');
+                if (rows.length > 1) {
+                    this.closest('.ingredient-row').remove();
+                    updateTotals();
+                } else {
+                    alert('Нужен хотя бы один ингредиент');
+                }
+            };
+        });
+
+        // Product select change
+        document.querySelectorAll('.product-select').forEach(select => {
+            select.onchange = function() {
+                updateIngredientNutrition(this.closest('.ingredient-row'));
+                updateTotals();
+            };
+        });
+
+        // Weight input change
+        document.querySelectorAll('.weight-input').forEach(input => {
+            input.oninput = function() {
+                updateIngredientNutrition(this.closest('.ingredient-row'));
+                updateTotals();
+            };
+        });
+    }
+
+    // Update single ingredient nutrition display
+    function updateIngredientNutrition(row) {
+        const select = row.querySelector('.product-select');
+        const weightInput = row.querySelector('.weight-input');
+        const nutritionDiv = row.querySelector('.ingredient-nutrition');
+
+        const option = select.options[select.selectedIndex];
+        const weight = parseFloat(weightInput.value) || 0;
+
+        if (option && option.value) {
+            const multiplier = weight / 100;
+            const cal = (parseFloat(option.dataset.calories) * multiplier).toFixed(0);
+            const prot = (parseFloat(option.dataset.protein) * multiplier).toFixed(1);
+            const fat = (parseFloat(option.dataset.fat) * multiplier).toFixed(1);
+            const carbs = (parseFloat(option.dataset.carbs) * multiplier).toFixed(1);
+
+            nutritionDiv.innerHTML = `${cal} ккал | Б: ${prot}г | Ж: ${fat}г | У: ${carbs}г`;
+        } else {
+            nutritionDiv.innerHTML = '';
+        }
+    }
+
+    // Update totals
+    function updateTotals() {
+        let totalWeight = 0;
+        let totalCalories = 0;
+        let totalProtein = 0;
+        let totalFat = 0;
+        let totalCarbs = 0;
+
+        document.querySelectorAll('.ingredient-row').forEach(row => {
+            const select = row.querySelector('.product-select');
+            const weightInput = row.querySelector('.weight-input');
+
+            const option = select.options[select.selectedIndex];
+            const weight = parseFloat(weightInput.value) || 0;
+
+            if (option && option.value && weight > 0) {
+                const multiplier = weight / 100;
+                totalWeight += weight;
+                totalCalories += parseFloat(option.dataset.calories) * multiplier;
+                totalProtein += parseFloat(option.dataset.protein) * multiplier;
+                totalFat += parseFloat(option.dataset.fat) * multiplier;
+                totalCarbs += parseFloat(option.dataset.carbs) * multiplier;
+            }
+        });
+
+        // Update totals display
+        document.getElementById('totalWeight').textContent = totalWeight.toFixed(0) + ' г';
+        document.getElementById('totalCalories').textContent = totalCalories.toFixed(0);
+        document.getElementById('totalProtein').textContent = totalProtein.toFixed(1);
+        document.getElementById('totalFat').textContent = totalFat.toFixed(1);
+        document.getElementById('totalCarbs').textContent = totalCarbs.toFixed(1);
+
+        // Calculate per 100g
+        if (totalWeight > 0) {
+            const multiplier = 100 / totalWeight;
+            document.getElementById('per100Calories').textContent = (totalCalories * multiplier).toFixed(0);
+            document.getElementById('per100Protein').textContent = (totalProtein * multiplier).toFixed(1);
+            document.getElementById('per100Fat').textContent = (totalFat * multiplier).toFixed(1);
+            document.getElementById('per100Carbs').textContent = (totalCarbs * multiplier).toFixed(1);
+        } else {
+            document.getElementById('per100Calories').textContent = '0';
+            document.getElementById('per100Protein').textContent = '0';
+            document.getElementById('per100Fat').textContent = '0';
+            document.getElementById('per100Carbs').textContent = '0';
+        }
+    }
+
+    // Initial setup
+    attachEventListeners();
+
+    // Update all existing ingredients
+    document.querySelectorAll('.ingredient-row').forEach(row => {
+        updateIngredientNutrition(row);
+    });
+    updateTotals();
+});
+</script>
+{% endblock %}

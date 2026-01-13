@@ -1,0 +1,164 @@
+<!-- templates/base.html -->
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="default">
+    <meta name="theme-color" content="#28a745">
+    <meta name="mobile-web-app-capable" content="yes">
+<link rel="manifest" href="{{ url_for('static', filename='manifest.json') }}">
+    <title>{% block title %}Дневник питания{% endblock %}</title>
+
+    <!-- Иконки для iOS -->
+    <link rel="apple-touch-icon" href="{{ url_for('static', filename='icons/icon-192.png') }}">
+
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.0/font/bootstrap-icons.css" rel="stylesheet">
+    <link href="{{ url_for('static', filename='css/style.css') }}" rel="stylesheet">
+</head>
+<body>
+    <!-- Верхняя навигация -->
+    <nav class="navbar navbar-expand-lg navbar-dark bg-success">
+        <div class="container">
+            <a class="navbar-brand" href="{{ url_for('index') }}">
+                <i class="bi bi-journal-text"></i>
+                <span class="d-none d-sm-inline">Дневник питания</span>
+                <span class="d-sm-none">Питание</span>
+            </a>
+
+            <!-- Десктопное меню -->
+            <div class="collapse navbar-collapse" id="navbarNav">
+                <ul class="navbar-nav me-auto">
+                    <li class="nav-item">
+                        <a class="nav-link" href="{{ url_for('index') }}">
+                            <i class="bi bi-calendar-day"></i> Дневник
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="{{ url_for('daily_summary') }}">
+                            <i class="bi bi-pie-chart"></i> Сводка
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="{{ url_for('products') }}">
+                            <i class="bi bi-list-ul"></i> Продукты
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="{{ url_for('recipes') }}">
+                            <i class="bi bi-book"></i> Рецепты
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="{{ url_for('settings') }}">
+                            <i class="bi bi-gear"></i> Настройки
+                        </a>
+                    </li>
+                </ul>
+            </div>
+
+            <!-- Меню пользователя (всегда видно) -->
+            <ul class="navbar-nav user-nav">
+                <li class="nav-item dropdown">
+                    <a class="nav-link dropdown-toggle py-1 px-2" href="#" id="userDropdown" role="button"
+                       data-bs-toggle="dropdown" aria-expanded="false">
+                        <i class="bi bi-person-circle fs-5"></i>
+                        <span class="d-none d-md-inline ms-1">{{ current_user.username }}</span>
+                    </a>
+                    <ul class="dropdown-menu dropdown-menu-end" aria-labelledby="userDropdown">
+                        <li>
+                            <span class="dropdown-item-text text-muted">
+                                <small>Вы вошли как</small><br>
+                                <strong>{{ current_user.username }}</strong>
+                            </span>
+                        </li>
+                        <li><hr class="dropdown-divider"></li>
+                        <li>
+                            <a class="dropdown-item" href="{{ url_for('settings') }}">
+                                <i class="bi bi-gear"></i> Настройки
+                            </a>
+                        </li>
+                        <li>
+                            <a class="dropdown-item text-danger" href="{{ url_for('logout') }}">
+                                <i class="bi bi-box-arrow-right"></i> Выйти
+                            </a>
+                        </li>
+                    </ul>
+                </li>
+            </ul>
+        </div>
+    </nav>
+
+    <!-- Основной контент -->
+    <main class="container my-3">
+        {% with messages = get_flashed_messages(with_categories=true) %}
+            {% if messages %}
+                {% for category, message in messages %}
+                    <div class="alert alert-{{ 'danger' if category == 'error' else 'success' if category == 'success' else category }} alert-dismissible fade show py-2 slide-up">
+                        {{ message }}
+                        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+                    </div>
+                {% endfor %}
+            {% endif %}
+        {% endwith %}
+
+        {% block content %}{% endblock %}
+    </main>
+
+    <!-- Футер (скрыт на мобильных) -->
+    <footer class="bg-light py-3 mt-auto">
+        <div class="container text-center text-muted">
+            <small>Дневник питания © 2024 | {{ current_user.username }}</small>
+        </div>
+    </footer>
+
+    <!-- Мобильное нижнее меню -->
+    <nav class="mobile-nav">
+        <ul class="mobile-nav-items">
+            <li class="mobile-nav-item">
+                <a href="{{ url_for('index') }}" class="mobile-nav-link {% if request.endpoint == 'index' %}active{% endif %}">
+                    <i class="bi bi-calendar-day"></i>
+                    <span>Дневник</span>
+                </a>
+            </li>
+            <li class="mobile-nav-item">
+                <a href="{{ url_for('daily_summary') }}" class="mobile-nav-link {% if request.endpoint == 'daily_summary' %}active{% endif %}">
+                    <i class="bi bi-pie-chart"></i>
+                    <span>Сводка</span>
+                </a>
+            </li>
+            <li class="mobile-nav-item">
+                <a href="{{ url_for('products') }}" class="mobile-nav-link {% if request.endpoint == 'products' %}active{% endif %}">
+                    <i class="bi bi-list-ul"></i>
+                    <span>Продукты</span>
+                </a>
+            </li>
+            <li class="mobile-nav-item">
+                <a href="{{ url_for('recipes') }}" class="mobile-nav-link {% if request.endpoint == 'recipes' %}active{% endif %}">
+                    <i class="bi bi-book"></i>
+                    <span>Рецепты</span>
+                </a>
+            </li>
+            <li class="mobile-nav-item">
+                <a href="{{ url_for('settings') }}" class="mobile-nav-link {% if request.endpoint == 'settings' %}active{% endif %}">
+                    <i class="bi bi-gear"></i>
+                    <span>Ещё</span>
+                </a>
+            </li>
+        </ul>
+    </nav>
+
+    <!-- FAB кнопка быстрого добавления (только на главной) -->
+    {% if request.endpoint == 'index' %}
+    <button class="fab-add" data-bs-toggle="modal" data-bs-target="#addMealModal" title="Добавить">
+        <i class="bi bi-plus-lg"></i>
+    </button>
+    {% endif %}
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="{{ url_for('static', filename='js/main.js') }}"></script>
+    {% block scripts %}{% endblock %}
+</body>
+</html>

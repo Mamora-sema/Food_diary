@@ -1,0 +1,613 @@
+/* static/css/style.css */
+
+:root {
+    --bs-success: #28a745;
+    --primary-gradient: linear-gradient(135deg, #28a745 0%, #20c997 100%);
+}
+
+/* =====================================================
+   ОСНОВНЫЕ СТИЛИ
+   ===================================================== */
+
+body {
+    background-color: #f8f9fa;
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    -webkit-tap-highlight-color: transparent;
+}
+
+main {
+    flex: 1;
+    padding-bottom: 70px; /* Для мобильного меню */
+}
+
+/* =====================================================
+   КАРТОЧКИ
+   ===================================================== */
+
+.card {
+    border-radius: 12px;
+    border: none;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+    overflow: hidden;
+}
+
+.card-header {
+    border-radius: 12px 12px 0 0 !important;
+    padding: 0.75rem 1rem;
+}
+
+/* =====================================================
+   ПРОГРЕСС-БАРЫ
+   ===================================================== */
+
+.progress {
+    border-radius: 10px;
+    background-color: #e9ecef;
+}
+
+.progress-bar {
+    border-radius: 10px;
+    transition: width 0.4s ease;
+}
+
+/* =====================================================
+   КНОПКИ
+   ===================================================== */
+
+.btn {
+    border-radius: 8px;
+    font-weight: 500;
+    transition: all 0.2s ease;
+}
+
+.btn:active {
+    transform: scale(0.98);
+}
+
+.btn-success {
+    background: var(--primary-gradient);
+    border: none;
+}
+
+/* =====================================================
+   ФОРМЫ
+   ===================================================== */
+
+.form-control, .form-select {
+    border-radius: 8px;
+    padding: 0.6rem 0.75rem;
+    font-size: 16px; /* Предотвращает зум на iOS */
+}
+
+.form-control:focus, .form-select:focus {
+    box-shadow: 0 0 0 3px rgba(40, 167, 69, 0.2);
+    border-color: #28a745;
+}
+
+/* =====================================================
+   СВОРАЧИВАЕМЫЕ ПРИЁМЫ ПИЩИ
+   ===================================================== */
+
+.collapse-icon {
+    transition: transform 0.2s ease;
+    font-size: 0.9rem;
+}
+
+.meal-card .card-header {
+    cursor: pointer;
+    user-select: none;
+    -webkit-user-select: none;
+}
+
+.meal-card .card-header:active {
+    filter: brightness(0.95);
+}
+
+.meal-summary-inline {
+    font-size: 0.8rem;
+    gap: 0.4rem !important;
+}
+
+.meal-summary-inline span {
+    white-space: nowrap;
+}
+
+/* =====================================================
+   ТАБЛИЦЫ
+   ===================================================== */
+
+.table {
+    margin-bottom: 0;
+    font-size: 0.9rem;
+}
+
+.table th {
+    font-weight: 500;
+    border-top: none;
+    white-space: nowrap;
+}
+
+.table td {
+    vertical-align: middle;
+}
+
+/* =====================================================
+   НАВИГАЦИЯ - ДЕСКТОП
+   ===================================================== */
+
+.navbar {
+    padding: 0.5rem 1rem;
+}
+
+.navbar-brand {
+    font-weight: bold;
+    font-size: 1.1rem;
+}
+
+/* =====================================================
+   НИЖНЕЕ МОБИЛЬНОЕ МЕНЮ
+   ===================================================== */
+
+.mobile-nav {
+    display: none;
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    background: white;
+    box-shadow: 0 -2px 10px rgba(0, 0, 0, 0.1);
+    z-index: 1000;
+    padding: 0.5rem 0;
+    padding-bottom: calc(0.5rem + env(safe-area-inset-bottom));
+}
+
+.mobile-nav-items {
+    display: flex;
+    justify-content: space-around;
+    align-items: center;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+}
+
+.mobile-nav-item {
+    flex: 1;
+    text-align: center;
+}
+
+.mobile-nav-link {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 0.3rem;
+    color: #6c757d;
+    text-decoration: none;
+    font-size: 0.7rem;
+    transition: color 0.2s;
+}
+
+.mobile-nav-link i {
+    font-size: 1.3rem;
+    margin-bottom: 0.1rem;
+}
+
+.mobile-nav-link.active,
+.mobile-nav-link:hover {
+    color: #28a745;
+}
+
+.mobile-nav-link:active {
+    transform: scale(0.95);
+}
+
+/* =====================================================
+   КНОПКА БЫСТРОГО ДОБАВЛЕНИЯ (FAB)
+   ===================================================== */
+
+.fab-add {
+    display: none;
+    position: fixed;
+    bottom: 80px;
+    right: 20px;
+    width: 56px;
+    height: 56px;
+    border-radius: 50%;
+    background: var(--primary-gradient);
+    color: white;
+    border: none;
+    box-shadow: 0 4px 12px rgba(40, 167, 69, 0.4);
+    font-size: 1.5rem;
+    z-index: 999;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: transform 0.2s, box-shadow 0.2s;
+}
+
+.fab-add:hover {
+    transform: scale(1.05);
+    box-shadow: 0 6px 16px rgba(40, 167, 69, 0.5);
+}
+
+.fab-add:active {
+    transform: scale(0.95);
+}
+
+/* =====================================================
+   МОБИЛЬНЫЕ СТИЛИ
+   ===================================================== */
+
+@media (max-width: 991.98px) {
+    /* Скрываем десктопную навигацию */
+    .navbar .navbar-nav:not(.user-nav) {
+        display: none !important;
+    }
+
+    /* Показываем мобильное меню */
+    .mobile-nav {
+        display: block;
+    }
+
+    /* FAB кнопка */
+    .fab-add {
+        display: flex;
+    }
+
+    /* Отступ для контента */
+    main {
+        padding-bottom: 80px;
+    }
+
+    /* Скрываем футер на мобильных */
+    footer {
+        display: none;
+    }
+}
+
+@media (max-width: 767.98px) {
+    /* Контейнер */
+    .container {
+        padding-left: 12px;
+        padding-right: 12px;
+    }
+
+    main.container {
+        margin-top: 0.5rem !important;
+    }
+
+    /* Карточки */
+    .card {
+        border-radius: 10px;
+    }
+
+    .card-body {
+        padding: 0.75rem;
+    }
+
+    .card-header {
+        padding: 0.6rem 0.75rem;
+    }
+
+    /* Приёмы пищи */
+    .meal-card .card-header h6 {
+        font-size: 0.9rem;
+    }
+
+    .meal-summary-inline {
+        font-size: 0.7rem;
+    }
+
+    /* Скрываем БЖУ, оставляем только калории */
+    .meal-summary-inline .text-danger,
+    .meal-summary-inline .text-warning,
+    .meal-summary-inline .text-primary {
+        display: none;
+    }
+
+    /* Таблица продуктов в приёме пищи */
+    .meal-card .table {
+        font-size: 0.8rem;
+    }
+
+    .meal-card .table th {
+        padding: 0.3rem 0.2rem;
+        font-size: 0.7rem;
+    }
+
+    .meal-card .table td {
+        padding: 0.4rem 0.2rem;
+    }
+
+    /* Скрываем колонки БЖУ в таблице на маленьких экранах */
+    .meal-card .table .hide-mobile {
+        display: none;
+    }
+
+    /* Навигация по датам */
+    .date-nav h4 {
+        font-size: 1rem;
+    }
+
+    .date-nav .btn {
+        padding: 0.4rem 0.6rem;
+        font-size: 0.85rem;
+    }
+
+    /* Боковая панель */
+    .sticky-top {
+        position: relative !important;
+        top: 0 !important;
+    }
+
+    /* Сводка за день */
+    .summary-card h5 {
+        font-size: 1rem;
+    }
+
+    .summary-card .progress {
+        height: 8px !important;
+    }
+
+    /* Модальное окно */
+    .modal-dialog {
+        margin: 0.5rem;
+        max-width: calc(100% - 1rem);
+    }
+
+    .modal-body {
+        padding: 1rem;
+    }
+
+    /* Кнопки веса */
+    .weight-btn {
+        padding: 0.4rem 0.6rem;
+        font-size: 0.8rem;
+    }
+
+    /* Выбор продукта */
+    #productSelect {
+        font-size: 0.9rem;
+    }
+
+    /* Предпросмотр питательности */
+    .nutrition-preview .fs-5 {
+        font-size: 1rem !important;
+    }
+}
+
+@media (max-width: 575.98px) {
+    /* Ещё меньшие экраны */
+    .meal-summary-inline .fw-bold {
+        font-size: 0.75rem;
+    }
+
+    .meal-card .table td,
+    .meal-card .table th {
+        padding: 0.3rem 0.15rem;
+    }
+
+    /* Кнопки быстрого веса */
+    .weight-btn {
+        padding: 0.3rem 0.4rem;
+        font-size: 0.75rem;
+    }
+
+    /* FAB кнопка */
+    .fab-add {
+        width: 50px;
+        height: 50px;
+        bottom: 75px;
+        right: 15px;
+        font-size: 1.3rem;
+    }
+}
+
+/* =====================================================
+   TOUCH-FRIENDLY СТИЛИ
+   ===================================================== */
+
+@media (hover: none) and (pointer: coarse) {
+    /* Увеличиваем область нажатия для touch */
+    .btn {
+        min-height: 44px;
+        min-width: 44px;
+    }
+
+    .btn-sm {
+        min-height: 36px;
+        min-width: 36px;
+    }
+
+    .form-control, .form-select {
+        min-height: 44px;
+    }
+
+    .mobile-nav-link {
+        padding: 0.5rem;
+    }
+
+    /* Удаляем hover эффекты */
+    .card:hover,
+    .meal-card:hover {
+        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+    }
+}
+
+/* =====================================================
+   SAFE AREA ДЛЯ IPHONE X+
+   ===================================================== */
+
+@supports (padding-bottom: env(safe-area-inset-bottom)) {
+    .mobile-nav {
+        padding-bottom: calc(0.5rem + env(safe-area-inset-bottom));
+    }
+
+    main {
+        padding-bottom: calc(80px + env(safe-area-inset-bottom));
+    }
+}
+
+/* =====================================================
+   СВАЙП ЖЕСТЫ (визуальные подсказки)
+   ===================================================== */
+
+.swipe-hint {
+    position: relative;
+    overflow: hidden;
+}
+
+.swipe-hint::after {
+    content: '';
+    position: absolute;
+    top: 0;
+    right: -100%;
+    width: 100%;
+    height: 100%;
+    background: linear-gradient(90deg, transparent, rgba(40, 167, 69, 0.1), transparent);
+    animation: swipeHint 2s ease-in-out infinite;
+}
+
+@keyframes swipeHint {
+    0%, 100% { right: -100%; }
+    50% { right: 100%; }
+}
+
+/* =====================================================
+   ПУЛЛИНГ ДЛЯ ОБНОВЛЕНИЯ (визуальный)
+   ===================================================== */
+
+.pull-indicator {
+    position: fixed;
+    top: 0;
+    left: 50%;
+    transform: translateX(-50%) translateY(-100%);
+    background: var(--primary-gradient);
+    color: white;
+    padding: 0.5rem 1rem;
+    border-radius: 0 0 10px 10px;
+    font-size: 0.85rem;
+    z-index: 1001;
+    transition: transform 0.3s;
+}
+
+.pull-indicator.visible {
+    transform: translateX(-50%) translateY(0);
+}
+
+/* =====================================================
+   АНИМАЦИИ
+   ===================================================== */
+
+.fade-in {
+    animation: fadeIn 0.3s ease;
+}
+
+@keyframes fadeIn {
+    from { opacity: 0; transform: translateY(10px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+
+.slide-up {
+    animation: slideUp 0.3s ease;
+}
+
+@keyframes slideUp {
+    from { opacity: 0; transform: translateY(20px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+
+/* =====================================================
+   ТЁМНАЯ ТЕМА (по системным настройкам)
+   ===================================================== */
+
+@media (prefers-color-scheme: dark) {
+    /* Раскомментируйте для тёмной темы */
+    /*
+    body {
+        background-color: #1a1a1a;
+        color: #e0e0e0;
+    }
+
+    .card {
+        background-color: #2d2d2d;
+    }
+
+    .mobile-nav {
+        background: #2d2d2d;
+    }
+    */
+}
+
+/* =====================================================
+   ДОПОЛНИТЕЛЬНЫЕ УТИЛИТЫ
+   ===================================================== */
+
+.text-truncate-2 {
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+}
+
+.no-scrollbar::-webkit-scrollbar {
+    display: none;
+}
+
+.no-scrollbar {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+}
+
+/* Для списка продуктов с горизонтальным скроллом */
+.horizontal-scroll {
+    display: flex;
+    overflow-x: auto;
+    scroll-snap-type: x mandatory;
+    -webkit-overflow-scrolling: touch;
+    padding-bottom: 0.5rem;
+}
+
+.horizontal-scroll > * {
+    scroll-snap-align: start;
+    flex-shrink: 0;
+}
+
+/* =====================================================
+   СПЕЦИФИЧНЫЕ СТИЛИ ДЛЯ СТРАНИЦ
+   ===================================================== */
+
+/* Страница рецептов */
+.recipe-card {
+    transition: transform 0.2s;
+}
+
+.recipe-card:active {
+    transform: scale(0.98);
+}
+
+/* Страница настроек */
+.settings-input {
+    font-size: 1.2rem;
+    text-align: center;
+    font-weight: bold;
+}
+
+/* Страница сводки */
+.summary-stat {
+    text-align: center;
+    padding: 1rem;
+}
+
+.summary-stat .value {
+    font-size: 2rem;
+    font-weight: bold;
+    line-height: 1;
+}
+
+@media (max-width: 767.98px) {
+    .summary-stat .value {
+        font-size: 1.5rem;
+    }
+}

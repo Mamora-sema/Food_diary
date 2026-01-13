@@ -1,0 +1,406 @@
+<!-- templates/index.html -->
+{% extends "base.html" %}
+
+{% block title %}Дневник питания - {{ summary.date.strftime('%d.%m.%Y') }}{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-lg-8">
+        <!-- Навигация по датам -->
+        <div class="card mb-3 date-nav">
+            <div class="card-body py-2">
+                <div class="d-flex justify-content-between align-items-center">
+                    <a href="{{ url_for('index', date=(summary.date - timedelta(days=1)).isoformat()) }}"
+                       class="btn btn-outline-secondary btn-sm">
+                        <i class="bi bi-chevron-left"></i>
+                        <span class="d-none d-sm-inline">Вчера</span>
+                    </a>
+
+                    <div class="text-center flex-grow-1 mx-2">
+                        <h5 class="mb-0">
+                            {% if summary.date == today %}
+                                Сегодня
+                            {% else %}
+                                {{ summary.date.strftime('%d.%m.%Y') }}
+                            {% endif %}
+                        </h5>
+                        <input type="date" class="form-control form-control-sm mt-1 mx-auto"
+                               style="max-width: 140px;"
+                               id="dateSelector" value="{{ summary.date.isoformat() }}"
+                               onchange="window.location.href='?date=' + this.value">
+                    </div>
+
+                    <a href="{{ url_for('index', date=(summary.date + timedelta(days=1)).isoformat()) }}"
+                       class="btn btn-outline-secondary btn-sm">
+                        <span class="d-none d-sm-inline">Завтра</span>
+                        <i class="bi bi-chevron-right"></i>
+                    </a>
+                </div>
+            </div>
+        </div>
+
+        <!-- Краткая сводка для мобильных -->
+        <div class="card mb-3 d-lg-none">
+            <div class="card-body py-2">
+                <div class="row text-center">
+                    <div class="col-3">
+                        <div class="fw-bold text-success">{{ summary.totals.calories|round(0)|int }}</div>
+                        <small class="text-muted">Ккал</small>
+                    </div>
+                    <div class="col-3">
+                        <div class="fw-bold text-danger">{{ summary.totals.protein|round(0)|int }}г</div>
+                        <small class="text-muted">Белки</small>
+                    </div>
+                    <div class="col-3">
+                        <div class="fw-bold text-warning">{{ summary.totals.fat|round(0)|int }}г</div>
+                        <small class="text-muted">Жиры</small>
+                    </div>
+                    <div class="col-3">
+                        <div class="fw-bold text-primary">{{ summary.totals.carbs|round(0)|int }}г</div>
+                        <small class="text-muted">Углев.</small>
+                    </div>
+                </div>
+                <div class="progress mt-2" style="height: 6px;">
+                    <div class="progress-bar bg-success"
+                         style="width: {{ [summary.percentages.calories, 100]|min }}%"></div>
+                </div>
+                <small class="text-muted">{{ summary.percentages.calories }}% от нормы ({{ summary.goals.calories|int }} ккал)</small>
+            </div>
+        </div>
+
+        <!-- Приёмы пищи -->
+        {% for meal_key, meal_name in meal_types.items() %}
+        <div class="card mb-2 meal-card fade-in">
+            <div class="card-header d-flex justify-content-between align-items-center py-2
+                        {% if meal_key == 'breakfast' %}bg-warning-subtle
+                        {% elif meal_key == 'lunch' %}bg-success-subtle
+                        {% elif meal_key == 'dinner' %}bg-info-subtle
+                        {% else %}bg-secondary-subtle{% endif %}"
+                 data-bs-toggle="collapse"
+                 data-bs-target="#collapse-{{ meal_key }}"
+                 aria-expanded="true">
+
+                <div class="d-flex align-items-center">
+                    <i class="bi bi-chevron-down me-2 collapse-icon" id="icon-{{ meal_key }}"></i>
+                    <h6 class="mb-0">
+                        {% if meal_key == 'breakfast' %}<i class="bi bi-sunrise"></i>
+                        {% elif meal_key == 'lunch' %}<i class="bi bi-sun"></i>
+                        {% elif meal_key == 'dinner' %}<i class="bi bi-moon"></i>
+                        {% else %}<i class="bi bi-cup-hot"></i>{% endif %}
+                        {{ meal_name }}
+                    </h6>
+                </div>
+
+                <div class="d-flex align-items-center gap-2 meal-summary-inline">
+                    <span class="fw-bold">{{ summary.meal_totals[meal_key].calories|round(0)|int }}</span>
+                    <span class="text-danger">Б:{{ summary.meal_totals[meal_key].protein|round(0)|int }}</span>
+                    <span class="text-warning">Ж:{{ summary.meal_totals[meal_key].fat|round(0)|int }}</span>
+                    <span class="text-primary">У:{{ summary.meal_totals[meal_key].carbs|round(0)|int }}</span>
+                </div>
+            </div>
+
+            <div class="collapse show" id="collapse-{{ meal_key }}">
+                <div class="card-body py-2 px-2 px-sm-3">
+                    {% if summary.meals[meal_key] %}
+                        <!-- Мобильный вид - карточки -->
+                        <div class="d-md-none">
+                            {% for item in summary.meals[meal_key] %}
+                            <div class="d-flex justify-content-between align-items-center py-2 border-bottom">
+                                <div class="flex-grow-1">
+                                    <div class="fw-medium">
+                                        {{ item.product.name }}
+                                        {% if item.product.is_recipe %}
+                                        <i class="bi bi-book text-warning small"></i>
+                                        {% endif %}
+                                    </div>
+                                    <small class="text-muted">
+                                        {{ item.weight|int }}г ·
+                                        <span class="text-danger">Б:{{ item.nutrition.protein|round(0)|int }}</span>
+                                        <span class="text-warning">Ж:{{ item.nutrition.fat|round(0)|int }}</span>
+                                        <span class="text-primary">У:{{ item.nutrition.carbs|round(0)|int }}</span>
+                                    </small>
+                                </div>
+                                <div class="d-flex align-items-center gap-2">
+                                    <span class="fw-bold">{{ item.nutrition.calories|round(0)|int }}</span>
+                                    <form action="{{ url_for('delete_meal', entry_id=item.id) }}"
+                                          method="POST" class="d-inline">
+                                        <button type="submit" class="btn btn-sm btn-link text-danger p-0"
+                                                onclick="return confirm('Удалить?')">
+                                            <i class="bi bi-x-lg"></i>
+                                        </button>
+                                    </form>
+                                </div>
+                            </div>
+                            {% endfor %}
+                        </div>
+
+                        <!-- Десктопный вид - таблица -->
+                        <div class="d-none d-md-block">
+                            <table class="table table-sm table-hover mb-2">
+                                <thead>
+                                    <tr class="small text-muted">
+                                        <th>Продукт</th>
+                                        <th class="text-center">Вес</th>
+                                        <th class="text-center">Б</th>
+                                        <th class="text-center">Ж</th>
+                                        <th class="text-center">У</th>
+                                        <th class="text-center">Ккал</th>
+                                        <th></th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {% for item in summary.meals[meal_key] %}
+                                    <tr>
+                                        <td>
+                                            {{ item.product.name }}
+                                            {% if item.product.is_recipe %}
+                                            <i class="bi bi-book text-warning small"></i>
+                                            {% endif %}
+                                        </td>
+                                        <td class="text-center text-muted">{{ item.weight|int }}г</td>
+                                        <td class="text-center text-danger">{{ item.nutrition.protein|round(1) }}</td>
+                                        <td class="text-center text-warning">{{ item.nutrition.fat|round(1) }}</td>
+                                        <td class="text-center text-primary">{{ item.nutrition.carbs|round(1) }}</td>
+                                        <td class="text-center fw-bold">{{ item.nutrition.calories|round(0)|int }}</td>
+                                        <td class="text-end">
+                                            <form action="{{ url_for('delete_meal', entry_id=item.id) }}"
+                                                  method="POST" class="d-inline">
+                                                <button type="submit" class="btn btn-sm btn-outline-danger py-0 px-1"
+                                                        onclick="return confirm('Удалить?')">
+                                                    <i class="bi bi-x"></i>
+                                                </button>
+                                            </form>
+                                        </td>
+                                    </tr>
+                                    {% endfor %}
+                                </tbody>
+                            </table>
+                        </div>
+                    {% else %}
+                        <p class="text-muted small mb-2 text-center">Нет записей</p>
+                    {% endif %}
+
+                    <div class="text-center">
+                        <button class="btn btn-sm btn-outline-success"
+                                data-bs-toggle="modal" data-bs-target="#addMealModal"
+                                data-meal-type="{{ meal_key }}"
+                                onclick="event.stopPropagation();">
+                            <i class="bi bi-plus-lg"></i> Добавить
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+
+    <!-- Боковая панель (только на десктопе) -->
+    <div class="col-lg-4 d-none d-lg-block">
+        <div class="card sticky-top summary-card" style="top: 20px;">
+            <div class="card-header bg-success text-white">
+                <h5 class="mb-0"><i class="bi bi-pie-chart"></i> Итого за день</h5>
+            </div>
+            <div class="card-body">
+                <!-- Калории -->
+                <div class="mb-3">
+                    <div class="d-flex justify-content-between">
+                        <span>Калории</span>
+                        <span class="fw-bold">{{ summary.totals.calories|round(0)|int }} / {{ summary.goals.calories|int }}</span>
+                    </div>
+                    <div class="progress" style="height: 10px;">
+                        <div class="progress-bar bg-success"
+                             style="width: {{ [summary.percentages.calories, 100]|min }}%"></div>
+                    </div>
+                    <small class="text-muted">{{ summary.percentages.calories }}% от нормы</small>
+                </div>
+
+                <!-- Белки -->
+                <div class="mb-3">
+                    <div class="d-flex justify-content-between">
+                        <span class="text-danger"><i class="bi bi-circle-fill"></i> Белки</span>
+                        <span>{{ summary.totals.protein|round(1) }} / {{ summary.goals.protein|int }} г</span>
+                    </div>
+                    <div class="progress" style="height: 8px;">
+                        <div class="progress-bar bg-danger"
+                             style="width: {{ [summary.percentages.protein, 100]|min }}%"></div>
+                    </div>
+                </div>
+
+                <!-- Жиры -->
+                <div class="mb-3">
+                    <div class="d-flex justify-content-between">
+                        <span class="text-warning"><i class="bi bi-circle-fill"></i> Жиры</span>
+                        <span>{{ summary.totals.fat|round(1) }} / {{ summary.goals.fat|int }} г</span>
+                    </div>
+                    <div class="progress" style="height: 8px;">
+                        <div class="progress-bar bg-warning"
+                             style="width: {{ [summary.percentages.fat, 100]|min }}%"></div>
+                    </div>
+                </div>
+
+                <!-- Углеводы -->
+                <div class="mb-3">
+                    <div class="d-flex justify-content-between">
+                        <span class="text-primary"><i class="bi bi-circle-fill"></i> Углеводы</span>
+                        <span>{{ summary.totals.carbs|round(1) }} / {{ summary.goals.carbs|int }} г</span>
+                    </div>
+                    <div class="progress" style="height: 8px;">
+                        <div class="progress-bar bg-primary"
+                             style="width: {{ [summary.percentages.carbs, 100]|min }}%"></div>
+                    </div>
+                </div>
+
+                <hr>
+
+                <!-- Соотношение БЖУ -->
+                <h6>Соотношение БЖУ</h6>
+                <div class="progress" style="height: 20px;">
+                    <div class="progress-bar bg-danger" style="width: {{ summary.macro_breakdown.protein }}%">
+                        {% if summary.macro_breakdown.protein > 15 %}{{ summary.macro_breakdown.protein|round(0)|int }}%{% endif %}
+                    </div>
+                    <div class="progress-bar bg-warning" style="width: {{ summary.macro_breakdown.fat }}%">
+                        {% if summary.macro_breakdown.fat > 15 %}{{ summary.macro_breakdown.fat|round(0)|int }}%{% endif %}
+                    </div>
+                    <div class="progress-bar bg-primary" style="width: {{ summary.macro_breakdown.carbs }}%">
+                        {% if summary.macro_breakdown.carbs > 15 %}{{ summary.macro_breakdown.carbs|round(0)|int }}%{% endif %}
+                    </div>
+                </div>
+                <div class="d-flex justify-content-between mt-1 small text-muted">
+                    <span>Б: {{ summary.macro_breakdown.protein }}%</span>
+                    <span>Ж: {{ summary.macro_breakdown.fat }}%</span>
+                    <span>У: {{ summary.macro_breakdown.carbs }}%</span>
+                </div>
+
+                <hr>
+
+                <a href="{{ url_for('daily_summary', date=summary.date.isoformat()) }}"
+                   class="btn btn-outline-success w-100">
+                    <i class="bi bi-bar-chart"></i> Подробная сводка
+                </a>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Модальное окно добавления -->
+<div class="modal fade" id="addMealModal" tabindex="-1">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header bg-success text-white py-2">
+                <h5 class="modal-title"><i class="bi bi-plus-circle"></i> Добавить</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <form action="{{ url_for('add_meal') }}" method="POST">
+                <div class="modal-body">
+                    <input type="hidden" name="date" value="{{ summary.date.isoformat() }}">
+
+                    <div class="mb-3">
+                        <label class="form-label">Приём пищи</label>
+                        <select name="meal_type" id="modalMealType" class="form-select" required>
+                            {% for key, name in meal_types.items() %}
+                            <option value="{{ key }}">{{ name }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label">Продукт</label>
+                        <input type="text" id="productSearch" class="form-control mb-2"
+                               placeholder="🔍 Поиск...">
+                        <select name="product_id" id="productSelect" class="form-select" required size="5">
+                            {% for product in products %}
+                            <option value="{{ product.id }}"
+                                    data-calories="{{ product.calories }}"
+                                    data-protein="{{ product.protein }}"
+                                    data-fat="{{ product.fat }}"
+                                    data-carbs="{{ product.carbs }}">
+                                {{ product.name }} ({{ product.calories|round(0)|int }} ккал)
+                            </option>
+                            {% endfor %}
+                        </select>
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label">Количество</label>
+                        <div class="d-flex gap-1 mb-2 flex-wrap">
+                            <button type="button" class="btn btn-outline-secondary btn-sm weight-btn" data-weight="50">50г</button>
+                            <button type="button" class="btn btn-outline-secondary btn-sm weight-btn active" data-weight="100">100г</button>
+                            <button type="button" class="btn btn-outline-secondary btn-sm weight-btn" data-weight="150">150г</button>
+                            <button type="button" class="btn btn-outline-secondary btn-sm weight-btn" data-weight="200">200г</button>
+                            <button type="button" class="btn btn-outline-secondary btn-sm weight-btn" data-weight="250">250г</button>
+                        </div>
+                        <div class="input-group">
+                            <input type="number" name="weight" id="weightInput" class="form-control"
+                                   value="100" min="1" max="2000" required>
+                            <span class="input-group-text">грамм</span>
+                        </div>
+                    </div>
+
+                    <!-- Предпросмотр -->
+                    <div class="card bg-light nutrition-preview">
+                        <div class="card-body py-2">
+                            <div class="row text-center">
+                                <div class="col-3">
+                                    <div class="fw-bold fs-5" id="previewCalories">0</div>
+                                    <small class="text-muted">Ккал</small>
+                                </div>
+                                <div class="col-3">
+                                    <div class="fw-bold fs-5 text-danger" id="previewProtein">0</div>
+                                    <small class="text-muted">Б</small>
+                                </div>
+                                <div class="col-3">
+                                    <div class="fw-bold fs-5 text-warning" id="previewFat">0</div>
+                                    <small class="text-muted">Ж</small>
+                                </div>
+                                <div class="col-3">
+                                    <div class="fw-bold fs-5 text-primary" id="previewCarbs">0</div>
+                                    <small class="text-muted">У</small>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer py-2">
+                    <a href="{{ url_for('add_product') }}" class="btn btn-outline-primary btn-sm me-auto">
+                        <i class="bi bi-plus"></i> Новый продукт
+                    </a>
+                    <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Отмена</button>
+                    <button type="submit" class="btn btn-success">
+                        <i class="bi bi-check-lg"></i> Добавить
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // Сворачивание приёмов пищи
+    document.querySelectorAll('[data-bs-toggle="collapse"]').forEach(function(header) {
+        const targetId = header.getAttribute('data-bs-target');
+        if (!targetId) return;
+
+        const target = document.querySelector(targetId);
+        if (!target) return;
+
+        const mealKey = targetId.replace('#collapse-', '');
+        const icon = document.getElementById('icon-' + mealKey);
+
+        if (icon) {
+            target.addEventListener('show.bs.collapse', function() {
+                icon.classList.remove('bi-chevron-right');
+                icon.classList.add('bi-chevron-down');
+            });
+
+            target.addEventListener('hide.bs.collapse', function() {
+                icon.classList.remove('bi-chevron-down');
+                icon.classList.add('bi-chevron-right');
+            });
+        }
+    });
+});
+</script>
+{% endblock %}

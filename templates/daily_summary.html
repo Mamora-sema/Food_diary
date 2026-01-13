@@ -1,0 +1,240 @@
+
+{% extends "base.html" %}
+
+{% block title %}Сводка за {{ summary.date.strftime('%d.%m.%Y') }}{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-12">
+        <div class="d-flex justify-content-between align-items-center mb-4">
+            <h2><i class="bi bi-bar-chart"></i> Сводка за {{ summary.date.strftime('%d.%m.%Y') }}</h2>
+            <a href="{{ url_for('index', date=summary.date.isoformat()) }}" class="btn btn-outline-secondary">
+                <i class="bi bi-arrow-left"></i> К дневнику
+            </a>
+        </div>
+    </div>
+</div>
+
+<div class="row">
+    <div class="col-lg-8">
+        <!-- Calories Card -->
+        <div class="card mb-4">
+            <div class="card-header bg-success text-white">
+                <h5 class="mb-0"><i class="bi bi-lightning"></i> Калории</h5>
+            </div>
+            <div class="card-body">
+                <div class="row align-items-center">
+                    <div class="col-md-4 text-center">
+                        <h1 class="display-4 text-success">{{ summary.totals.calories|round(0)|int }}</h1>
+                        <p class="text-muted mb-0">из {{ summary.goals.calories|int }} ккал</p>
+                    </div>
+                    <div class="col-md-8">
+                        <div class="progress mb-3" style="height: 30px;">
+                            <div class="progress-bar bg-success" style="width: {{ [summary.percentages.calories, 100]|min }}%">
+                                {{ summary.percentages.calories }}%
+                            </div>
+                        </div>
+                        <div class="row text-center">
+                            <div class="col-4">
+                                <h4 class="{{ 'text-success' if summary.remaining.calories >= 0 else 'text-danger' }}">
+                                    {{ summary.remaining.calories|abs|round(0)|int }}
+                                </h4>
+                                <small class="text-muted">{{ 'Осталось' if summary.remaining.calories >= 0 else 'Превышено' }}</small>
+                            </div>
+                            <div class="col-4">
+                                <h4>{{ summary.percentages.calories }}%</h4>
+                                <small class="text-muted">От нормы</small>
+                            </div>
+                            <div class="col-4">
+                                <h4>{{ summary.goals.calories|int }}</h4>
+                                <small class="text-muted">Цель</small>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Macros Cards -->
+        <div class="row">
+            <div class="col-md-4">
+                <div class="card mb-4 border-danger">
+                    <div class="card-header bg-danger text-white">
+                        <h6 class="mb-0">Белки</h6>
+                    </div>
+                    <div class="card-body text-center">
+                        <h2 class="text-danger">{{ summary.totals.protein|round(1) }}г</h2>
+                        <p class="text-muted">из {{ summary.goals.protein|int }}г</p>
+                        <div class="progress" style="height: 10px;">
+                            <div class="progress-bar bg-danger" style="width: {{ [summary.percentages.protein, 100]|min }}%"></div>
+                        </div>
+                        <small>{{ summary.percentages.protein }}% от нормы</small>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-4">
+                <div class="card mb-4 border-warning">
+                    <div class="card-header bg-warning">
+                        <h6 class="mb-0">Жиры</h6>
+                    </div>
+                    <div class="card-body text-center">
+                        <h2 class="text-warning">{{ summary.totals.fat|round(1) }}г</h2>
+                        <p class="text-muted">из {{ summary.goals.fat|int }}г</p>
+                        <div class="progress" style="height: 10px;">
+                            <div class="progress-bar bg-warning" style="width: {{ [summary.percentages.fat, 100]|min }}%"></div>
+                        </div>
+                        <small>{{ summary.percentages.fat }}% от нормы</small>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-4">
+                <div class="card mb-4 border-primary">
+                    <div class="card-header bg-primary text-white">
+                        <h6 class="mb-0">Углеводы</h6>
+                    </div>
+                    <div class="card-body text-center">
+                        <h2 class="text-primary">{{ summary.totals.carbs|round(1) }}г</h2>
+                        <p class="text-muted">из {{ summary.goals.carbs|int }}г</p>
+                        <div class="progress" style="height: 10px;">
+                            <div class="progress-bar bg-primary" style="width: {{ [summary.percentages.carbs, 100]|min }}%"></div>
+                        </div>
+                        <small>{{ summary.percentages.carbs }}% от нормы</small>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Macro Breakdown -->
+        <div class="card mb-4">
+            <div class="card-header">
+                <h5 class="mb-0">Распределение БЖУ</h5>
+            </div>
+            <div class="card-body">
+                <div class="row">
+                    <div class="col-md-6">
+                        <h6>По весу (граммы)</h6>
+                        <div class="progress mb-3" style="height: 30px;">
+                            <div class="progress-bar bg-danger" style="width: {{ summary.macro_breakdown.protein }}%">Б {{ summary.macro_breakdown.protein }}%</div>
+                            <div class="progress-bar bg-warning" style="width: {{ summary.macro_breakdown.fat }}%">Ж {{ summary.macro_breakdown.fat }}%</div>
+                            <div class="progress-bar bg-primary" style="width: {{ summary.macro_breakdown.carbs }}%">У {{ summary.macro_breakdown.carbs }}%</div>
+                        </div>
+                    </div>
+                    <div class="col-md-6">
+                        <h6>По калориям</h6>
+                        <div class="progress mb-3" style="height: 30px;">
+                            <div class="progress-bar bg-danger" style="width: {{ summary.calorie_breakdown.protein }}%">Б {{ summary.calorie_breakdown.protein }}%</div>
+                            <div class="progress-bar bg-warning" style="width: {{ summary.calorie_breakdown.fat }}%">Ж {{ summary.calorie_breakdown.fat }}%</div>
+                            <div class="progress-bar bg-primary" style="width: {{ summary.calorie_breakdown.carbs }}%">У {{ summary.calorie_breakdown.carbs }}%</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Meals Breakdown -->
+        <div class="card mb-4">
+            <div class="card-header">
+                <h5 class="mb-0">По приемам пищи</h5>
+            </div>
+            <div class="card-body">
+                <table class="table">
+                    <thead>
+                        <tr>
+                            <th>Прием пищи</th>
+                            <th class="text-center">Ккал</th>
+                            <th class="text-center">Б</th>
+                            <th class="text-center">Ж</th>
+                            <th class="text-center">У</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for meal_key, meal_name in meal_types.items() %}
+                        <tr>
+                            <td>{{ meal_name }}</td>
+                            <td class="text-center fw-bold">{{ summary.meal_totals[meal_key].calories|round(0)|int }}</td>
+                            <td class="text-center text-danger">{{ summary.meal_totals[meal_key].protein|round(1) }}</td>
+                            <td class="text-center text-warning">{{ summary.meal_totals[meal_key].fat|round(1) }}</td>
+                            <td class="text-center text-primary">{{ summary.meal_totals[meal_key].carbs|round(1) }}</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                    <tfoot class="table-light">
+                        <tr class="fw-bold">
+                            <td>Итого</td>
+                            <td class="text-center">{{ summary.totals.calories|round(0)|int }}</td>
+                            <td class="text-center text-danger">{{ summary.totals.protein|round(1) }}</td>
+                            <td class="text-center text-warning">{{ summary.totals.fat|round(1) }}</td>
+                            <td class="text-center text-primary">{{ summary.totals.carbs|round(1) }}</td>
+                        </tr>
+                    </tfoot>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <!-- Sidebar -->
+    <div class="col-lg-4">
+        <div class="card mb-4">
+            <div class="card-header bg-info text-white">
+                <h5 class="mb-0">% от РСК</h5>
+            </div>
+            <div class="card-body">
+                <div class="mb-3">
+                    <div class="d-flex justify-content-between">
+                        <span>Калории</span>
+                        <span class="fw-bold">{{ summary.percentages.calories }}%</span>
+                    </div>
+                    <div class="progress"><div class="progress-bar bg-success" style="width: {{ [summary.percentages.calories, 100]|min }}%"></div></div>
+                </div>
+                <div class="mb-3">
+                    <div class="d-flex justify-content-between">
+                        <span>Белки</span>
+                        <span class="fw-bold">{{ summary.percentages.protein }}%</span>
+                    </div>
+                    <div class="progress"><div class="progress-bar bg-danger" style="width: {{ [summary.percentages.protein, 100]|min }}%"></div></div>
+                </div>
+                <div class="mb-3">
+                    <div class="d-flex justify-content-between">
+                        <span>Жиры</span>
+                        <span class="fw-bold">{{ summary.percentages.fat }}%</span>
+                    </div>
+                    <div class="progress"><div class="progress-bar bg-warning" style="width: {{ [summary.percentages.fat, 100]|min }}%"></div></div>
+                </div>
+                <div class="mb-3">
+                    <div class="d-flex justify-content-between">
+                        <span>Углеводы</span>
+                        <span class="fw-bold">{{ summary.percentages.carbs }}%</span>
+                    </div>
+                    <div class="progress"><div class="progress-bar bg-primary" style="width: {{ [summary.percentages.carbs, 100]|min }}%"></div></div>
+                </div>
+            </div>
+        </div>
+
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0">Осталось</h5>
+            </div>
+            <div class="card-body">
+                <table class="table table-sm mb-0">
+                    <tr>
+                        <td>Калории</td>
+                        <td class="text-end fw-bold {{ 'text-success' if summary.remaining.calories >= 0 else 'text-danger' }}">{{ summary.remaining.calories|round(0)|int }} ккал</td>
+                    </tr>
+                    <tr>
+                        <td>Белки</td>
+                        <td class="text-end {{ 'text-success' if summary.remaining.protein >= 0 else 'text-danger' }}">{{ summary.remaining.protein|round(1) }} г</td>
+                    </tr>
+                    <tr>
+                        <td>Жиры</td>
+                        <td class="text-end {{ 'text-success' if summary.remaining.fat >= 0 else 'text-danger' }}">{{ summary.remaining.fat|round(1) }} г</td>
+                    </tr>
+                    <tr>
+                        <td>Углеводы</td>
+                        <td class="text-end {{ 'text-success' if summary.remaining.carbs >= 0 else 'text-danger' }}">{{ summary.remaining.carbs|round(1) }} г</td>
+                    </tr>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

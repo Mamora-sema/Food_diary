@@ -1,0 +1,106 @@
+<!-- templates/auth/login.html -->
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Вход - Дневник питания</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.0/font/bootstrap-icons.css" rel="stylesheet">
+    <style>
+        body {
+            background: linear-gradient(135deg, #28a745 0%, #20c997 100%);
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        .login-card {
+            max-width: 400px;
+            width: 100%;
+            border-radius: 15px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+        }
+        .login-header {
+            background: linear-gradient(135deg, #28a745 0%, #20c997 100%);
+            border-radius: 15px 15px 0 0;
+            padding: 2rem;
+            text-align: center;
+            color: white;
+        }
+        .login-header i {
+            font-size: 3rem;
+            margin-bottom: 0.5rem;
+        }
+        .form-floating label {
+            color: #6c757d;
+        }
+        .btn-success {
+            background: linear-gradient(135deg, #28a745 0%, #20c997 100%);
+            border: none;
+            padding: 0.75rem;
+            font-size: 1.1rem;
+        }
+        .btn-success:hover {
+            background: linear-gradient(135deg, #218838 0%, #1aa179 100%);
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="card login-card mx-auto">
+            <div class="login-header">
+                <i class="bi bi-journal-text"></i>
+                <h3 class="mb-0">Дневник питания</h3>
+                <small>Следите за своим рационом</small>
+            </div>
+            <div class="card-body p-4">
+                {% with messages = get_flashed_messages(with_categories=true) %}
+                    {% if messages %}
+                        {% for category, message in messages %}
+                            <div class="alert alert-{{ 'danger' if category == 'error' else category }} alert-dismissible fade show py-2">
+                                {{ message }}
+                                <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+                            </div>
+                        {% endfor %}
+                    {% endif %}
+                {% endwith %}
+
+                <form method="POST">
+                    <div class="form-floating mb-3">
+                        <input type="text" class="form-control" id="username" name="username"
+                               placeholder="Логин" required autofocus>
+                        <label for="username"><i class="bi bi-person"></i> Логин</label>
+                    </div>
+
+                    <div class="form-floating mb-3">
+                        <input type="password" class="form-control" id="password" name="password"
+                               placeholder="Пароль" required>
+                        <label for="password"><i class="bi bi-lock"></i> Пароль</label>
+                    </div>
+
+                    <div class="form-check mb-3">
+                        <input class="form-check-input" type="checkbox" id="remember" name="remember">
+                        <label class="form-check-label" for="remember">
+                            Запомнить меня
+                        </label>
+                    </div>
+
+                    <button type="submit" class="btn btn-success w-100 mb-3">
+                        <i class="bi bi-box-arrow-in-right"></i> Войти
+                    </button>
+                </form>
+
+                <hr>
+
+                <p class="text-center mb-0">
+                    Нет аккаунта?
+                    <a href="{{ url_for('register') }}" class="text-success fw-bold">Зарегистрироваться</a>
+                </p>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+</body>
+</html>

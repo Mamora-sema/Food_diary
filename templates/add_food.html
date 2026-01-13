@@ -1,0 +1,211 @@
+<!-- templates/add_food.html -->
+{% extends "base.html" %}
+
+{% block title %}{% if edit %}Редактировать{% else %}Добавить{% endif %} продукт{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center">
+    <div class="col-md-8">
+        <div class="card">
+            <div class="card-header bg-success text-white">
+                <h5 class="mb-0">
+                    <i class="bi bi-{% if edit %}pencil{% else %}plus-circle{% endif %}"></i>
+                    {% if edit %}Редактировать{% else %}Добавить{% endif %} продукт
+                </h5>
+            </div>
+            <div class="card-body">
+                <form method="POST" id="productForm">
+                    <div class="mb-3">
+                        <label class="form-label">Название продукта</label>
+                        <input type="text" name="name" class="form-control" required
+                               value="{{ product.name if product else '' }}"
+                               placeholder="Например: Куриная грудка">
+                    </div>
+                    
+                    <!-- Serving size selector -->
+                    <div class="card bg-light mb-3">
+                        <div class="card-body">
+                            <label class="form-label fw-bold">Пищевая ценность указана для:</label>
+                            <div class="row align-items-center">
+                                <div class="col-md-6">
+                                    <div class="form-check">
+                                        <input class="form-check-input" type="radio" name="serving_type" 
+                                               id="per100g" value="100" checked>
+                                        <label class="form-check-label" for="per100g">
+                                            <strong>100 грамм</strong> (стандартно)
+                                        </label>
+                                    </div>
+                                </div>
+                                <div class="col-md-6">
+                                    <div class="form-check">
+                                        <input class="form-check-input" type="radio" name="serving_type" 
+                                               id="perCustom" value="custom">
+                                        <label class="form-check-label" for="perCustom">
+                                            <strong>Своя порция:</strong>
+                                        </label>
+                                        <div class="input-group input-group-sm mt-2">
+                                            <input type="number" class="form-control" id="customServing" 
+                                                   name="custom_serving" value="100" min="1" max="10000"
+                                                   disabled>
+                                            <span class="input-group-text">грамм</span>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                            <small class="text-muted mt-2 d-block">
+                                <i class="bi bi-info-circle"></i> 
+                                Значения будут автоматически пересчитаны на 100 грамм для хранения
+                            </small>
+                        </div>
+                    </div>
+                    
+                    <!-- Nutrition input -->
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label">
+                                <i class="bi bi-lightning text-warning"></i> Калории (ккал)
+                            </label>
+                            <input type="number" name="calories" id="inputCalories" 
+                                   class="form-control form-control-lg" required
+                                   step="0.1" min="0"
+                                   value="{{ product.calories if product else '' }}"
+                                   placeholder="0">
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label">
+                                <i class="bi bi-circle-fill text-danger"></i> Белки (г)
+                            </label>
+                            <input type="number" name="protein" id="inputProtein" 
+                                   class="form-control form-control-lg" required
+                                   step="0.1" min="0"
+                                   value="{{ product.protein if product else '' }}"
+                                   placeholder="0">
+                        </div>
+                    </div>
+                    
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label">
+                                <i class="bi bi-circle-fill text-warning"></i> Жиры (г)
+                            </label>
+                            <input type="number" name="fat" id="inputFat" 
+                                   class="form-control form-control-lg" required
+                                   step="0.1" min="0"
+                                   value="{{ product.fat if product else '' }}"
+                                   placeholder="0">
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label">
+                                <i class="bi bi-circle-fill text-primary"></i> Углеводы (г)
+                            </label>
+                            <input type="number" name="carbs" id="inputCarbs" 
+                                   class="form-control form-control-lg" required
+                                   step="0.1" min="0"
+                                   value="{{ product.carbs if product else '' }}"
+                                   placeholder="0">
+                        </div>
+                    </div>
+                    
+                    <!-- Preview of per 100g values -->
+                    <div class="card bg-success bg-opacity-10 mb-4" id="previewCard" style="display: none;">
+                        <div class="card-body">
+                            <h6 class="card-title">
+                                <i class="bi bi-calculator"></i> Пересчет на 100 грамм:
+                            </h6>
+                            <div class="row text-center">
+                                <div class="col-3">
+                                    <div class="fw-bold fs-5" id="preview100Calories">0</div>
+                                    <small class="text-muted">Ккал</small>
+                                </div>
+                                <div class="col-3">
+                                    <div class="fw-bold fs-5 text-danger" id="preview100Protein">0</div>
+                                    <small class="text-muted">Белки</small>
+                                </div>
+                                <div class="col-3">
+                                    <div class="fw-bold fs-5 text-warning" id="preview100Fat">0</div>
+                                    <small class="text-muted">Жиры</small>
+                                </div>
+                                <div class="col-3">
+                                    <div class="fw-bold fs-5 text-primary" id="preview100Carbs">0</div>
+                                    <small class="text-muted">Углеводы</small>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <hr>
+
+                    <div class="d-flex justify-content-between">
+                        <a href="{{ url_for('products') }}" class="btn btn-secondary">
+                            <i class="bi bi-arrow-left"></i> Назад
+                        </a>
+                        <button type="submit" class="btn btn-success btn-lg">
+                            <i class="bi bi-check-lg"></i>
+                            {% if edit %}Сохранить{% else %}Добавить продукт{% endif %}
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const per100g = document.getElementById('per100g');
+    const perCustom = document.getElementById('perCustom');
+    const customServing = document.getElementById('customServing');
+    const previewCard = document.getElementById('previewCard');
+
+    const inputCalories = document.getElementById('inputCalories');
+    const inputProtein = document.getElementById('inputProtein');
+    const inputFat = document.getElementById('inputFat');
+    const inputCarbs = document.getElementById('inputCarbs');
+
+    const preview100Calories = document.getElementById('preview100Calories');
+    const preview100Protein = document.getElementById('preview100Protein');
+    const preview100Fat = document.getElementById('preview100Fat');
+    const preview100Carbs = document.getElementById('preview100Carbs');
+
+    function updateServingType() {
+        if (perCustom.checked) {
+            customServing.disabled = false;
+            customServing.focus();
+            previewCard.style.display = 'block';
+            updatePreview();
+        } else {
+            customServing.disabled = true;
+            previewCard.style.display = 'none';
+        }
+    }
+
+    per100g.addEventListener('change', updateServingType);
+    perCustom.addEventListener('change', updateServingType);
+
+    function updatePreview() {
+        if (!perCustom.checked) return;
+
+        const serving = parseFloat(customServing.value) || 100;
+        const multiplier = 100 / serving;
+
+        const calories = parseFloat(inputCalories.value) || 0;
+        const protein = parseFloat(inputProtein.value) || 0;
+        const fat = parseFloat(inputFat.value) || 0;
+        const carbs = parseFloat(inputCarbs.value) || 0;
+
+        preview100Calories.textContent = (calories * multiplier).toFixed(1);
+        preview100Protein.textContent = (protein * multiplier).toFixed(1);
+        preview100Fat.textContent = (fat * multiplier).toFixed(1);
+        preview100Carbs.textContent = (carbs * multiplier).toFixed(1);
+    }
+
+    customServing.addEventListener('input', updatePreview);
+    inputCalories.addEventListener('input', updatePreview);
+    inputProtein.addEventListener('input', updatePreview);
+    inputFat.addEventListener('input', updatePreview);
+    inputCarbs.addEventListener('input', updatePreview);
+});
+</script>
+{% endblock %}
